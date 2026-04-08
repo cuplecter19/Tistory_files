@@ -85,8 +85,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $parsed = json_decode($header_image_raw, true);
             if (is_array($parsed) && isset($parsed['src'])) {
                 $src = $parsed['src'];
-                // Validate src: must be a URL or data URI
-                $is_valid_url = preg_match('/^https?:\/\/.+/i', $src);
+                // Validate src: must be a URL with proper hostname or a data URI
+                $is_valid_url = preg_match('/^https?:\/\/[a-zA-Z0-9][\w\.\-]*\.[a-zA-Z]{2,}/i', $src);
                 $is_data_uri  = preg_match('/^data:image\//i', $src);
                 if ($is_valid_url || $is_data_uri) {
                     $safe = array(
