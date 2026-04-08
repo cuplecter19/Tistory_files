@@ -129,7 +129,7 @@ function cal_make_random_token() {
         $bytes = openssl_random_pseudo_bytes(8);
         if ($bytes !== false) $rand = bin2hex($bytes);
     }
-    if ($rand === '') $rand = substr(sha1(uniqid(mt_rand(), true)), 0, 16);
+    if ($rand === '') $rand = substr(sha1(uniqid('', true)), 0, 16);
     return $rand;
 }
 
@@ -141,16 +141,28 @@ function cal_fetch_remote_image_binary($url, $max_bytes, &$error) {
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
         curl_setopt($ch, CURLOPT_TIMEOUT, 15);
         curl_setopt($ch, CURLOPT_USERAGENT, 'calendar-header-fetcher');
+        if (defined('CURLOPT_PROTOCOLS') && defined('CURLPROTO_HTTP') && defined('CURLPROTO_HTTPS')) {
+            curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+        }
         $body = curl_exec($ch);
         if ($body === false) $error = 'image download failed';
         $status = intval(curl_getinfo($ch, CURLINFO_HTTP_CODE));
+        $effective_url = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
         curl_close($ch);
         if ($body !== false && ($status < 200 || $status >= 300)) {
             $error = 'image download failed';
             $body = false;
+        }
+        if ($body !== false && is_string($effective_url) && $effective_url !== '') {
+            $effective_error = '';
+            if (!cal_validate_remote_image_url($effective_url, $effective_error)) {
+                $error = 'blocked host';
+                $body = false;
+            }
         }
     } else {
         $context = stream_context_create(array(
@@ -184,7 +196,7 @@ function cal_detect_image_mime($binary, $allowed_mime_ext) {
             finfo_close($finfo);
         }
     }
-    if ((!$mime || !isset($allowed_mime_ext[$mime])) && function_exists('getimagesizefromstring')) {
+    if (!$mime && function_exists('getimagesizefromstring')) {
         $info = @getimagesizefromstring($binary);
         if (is_array($info) && isset($info['mime'])) $mime = $info['mime'];
     }
