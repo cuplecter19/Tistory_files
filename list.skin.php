@@ -480,6 +480,7 @@ CalendarBoard.init({
   google_refresh_url: '<?php echo $google_refresh_url; ?>',
   save_action_url: '<?php echo $_skin_url; ?>/ajax_event_save.php',
   copy_action_url: '<?php echo $_skin_url; ?>/copy_event.php',
-  delete_action_url: '<?php echo $_skin_url; ?>/delete_event.php'
+  delete_action_url: '<?php echo $_skin_url; ?>/delete_event.php',
+  pref_url: '<?php echo $_skin_url; ?>/ajax_pref.php'
 });
 </script>

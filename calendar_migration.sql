@@ -34,3 +34,12 @@ CREATE TABLE IF NOT EXISTS g5_calendar_google_map (
   UNIQUE KEY uniq_wr (bo_table, wr_id),
   UNIQUE KEY uniq_google (bo_table, google_event_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+-- 4) 사용자 환경설정 테이블 (테마, 헤더 이미지)
+CREATE TABLE IF NOT EXISTS g5_calendar_user_pref (
+  mb_id varchar(50) NOT NULL,
+  theme varchar(20) NOT NULL DEFAULT 'sakura',
+  header_image longtext,
+  updated_at datetime NOT NULL,
+  PRIMARY KEY (mb_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
