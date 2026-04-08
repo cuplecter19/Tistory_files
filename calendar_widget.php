@@ -33,10 +33,11 @@ $cw_goals  = array();
 $cw_ddays  = array();
 
 if ($_cw_table_exists) {
-    // 다가오는 일정 조회
+    // 위젯에 표시할 다가오는 일정 조회 (WIDGET=1 플래그 필수)
     $sql = "SELECT wr_id, wr_subject, wr_1, wr_2, wr_3, wr_6, wr_7, wr_5, wr_9
             FROM {$widget_write_table}
             WHERE wr_is_comment=0
+              AND wr_9 LIKE '%WIDGET=1%'
               AND (wr_1 >= '{$today}' OR (wr_2 >= '{$today}' AND wr_1 <= '{$today}'))
             ORDER BY wr_1 ASC, wr_6 ASC
             LIMIT {$widget_count}";
