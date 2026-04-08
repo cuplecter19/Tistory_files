@@ -86,7 +86,7 @@ if ($rand === '') {
     $rand = substr(sha1(uniqid(mt_rand(), true)), 0, 16);
 }
 
-$filename = 'header_'.date('YmdHis').'_'.$rand.'.'.$ext;
+$filename = 'header_'.$rand.'.'.$ext;
 $save_path = $upload_dir.'/'.$filename;
 
 if (!move_uploaded_file($file['tmp_name'], $save_path)) {
