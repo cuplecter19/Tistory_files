@@ -4,6 +4,7 @@ var CalendarBoard = (function() {
   var recentColors = [];
   var COLOR_STORAGE_KEY = 'cal_recent_colors';
   var THEME_STORAGE_KEY = 'cal_theme';
+  var HEADER_UPLOAD_PATH_PATTERN = /\/calendar_header\//i;
   var MAX_RECENT_COLORS = 12;
   var formsBound = false;
   var currentSelectedDay = null;
@@ -50,13 +51,27 @@ var CalendarBoard = (function() {
     xhr.send('theme=' + encodeURIComponent(name));
   }
 
-  function saveHeaderImageToServer(data){
+  function saveHeaderImageToServer(data, callback){
     if (!config.pref_url) return;
     var xhr = new XMLHttpRequest();
     xhr.open('POST', config.pref_url, true);
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
     xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
     var val = data ? JSON.stringify(data) : 'null';
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState !== 4) return;
+      if (xhr.status !== 200) { if (callback) callback(false, '서버 저장에 실패했습니다. (HTTP ' + xhr.status + ')'); return; }
+      try {
+        var resp = JSON.parse(xhr.responseText);
+        if (resp && resp.success) { if (callback) callback(true); return; }
+        if (callback) callback(false, (resp && resp.error) ? resp.error : '서버 저장에 실패했습니다.');
+      } catch (e) {
+        if (callback) callback(false, '서버 응답을 처리하지 못했습니다.');
+      }
+    };
+    xhr.onerror = function(){
+      if (callback) callback(false, '서버 저장 중 오류가 발생했습니다.');
+    };
     xhr.send('header_image=' + encodeURIComponent(val));
   }
 
@@ -140,13 +155,19 @@ var CalendarBoard = (function() {
     if (!src || imgEl.style.display === 'none') return null;
     var height = parseInt(imgEl.style.height) || 160;
     var fit = imgEl.style.objectFit || 'cover';
-    var type = /^data:image\//i.test(src) ? 'file' : 'url';
+    // data URI 또는 업로드 디렉터리 URL은 파일 업로드 기반 이미지로 취급한다.
+    var type = (/^data:image\//i.test(src) || HEADER_UPLOAD_PATH_PATTERN.test(src)) ? 'file' : 'url';
     return { src: src, type: type, height: height, fit: fit };
   }
 
   function saveHeaderImageData(data){
+    var prevData = getHeaderImageData();
     applyHeaderImage(data);
-    saveHeaderImageToServer(data);
+    saveHeaderImageToServer(data, function(success, errorMsg){
+      if (success) return;
+      applyHeaderImage(prevData);
+      if (errorMsg) alert(errorMsg);
+    });
   }
 
   function applyHeaderImage(data){

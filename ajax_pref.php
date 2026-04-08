@@ -22,11 +22,30 @@ function cal_starts_with($text, $prefix) {
 
 function cal_is_local_header_src($src, $upload_rel_dir) {
     if (!is_string($src) || $src === '') return false;
-    $data_rel_dir = preg_replace('#^/data/#', '/', $upload_rel_dir);
+    $normalized_upload_rel_dir = '/'.trim($upload_rel_dir, '/').'/';
+
+    $path = '';
+    $parts = parse_url($src);
+    if (is_array($parts) && isset($parts['path'])) {
+        $path = $parts['path'];
+    } else {
+        $path = $src;
+    }
+    if ($path !== '' && substr($path, 0, 1) !== '/') $path = '/'.$path;
+
+    if ($path && cal_starts_with($path, $normalized_upload_rel_dir)) return true;
+
+    $data_base_path = parse_url(G5_DATA_URL, PHP_URL_PATH);
+    if (is_string($data_base_path) && $data_base_path !== '') {
+        $data_prefix = rtrim($data_base_path, '/').'/';
+        $upload_tail = ltrim($normalized_upload_rel_dir, '/');
+        if (cal_starts_with($path, $data_prefix.$upload_tail)) return true;
+    }
+
     $prefixes = array(
-        rtrim(G5_DATA_URL, '/').rtrim($data_rel_dir, '/').'/',
-        rtrim(G5_URL, '/').$upload_rel_dir,
-        $upload_rel_dir
+        rtrim(G5_DATA_URL, '/').$normalized_upload_rel_dir,
+        rtrim(G5_URL, '/').$normalized_upload_rel_dir,
+        $normalized_upload_rel_dir
     );
     foreach ($prefixes as $prefix) {
         if (cal_starts_with($src, $prefix)) return true;

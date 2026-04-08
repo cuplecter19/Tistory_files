@@ -44,4 +44,13 @@ function gcal_ensure_tables() {
         updated_at datetime NOT NULL,
         PRIMARY KEY (mb_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8", false);
+
+    // 기존 설치본 스키마 보정 (CREATE IF NOT EXISTS는 기존 컬럼을 추가하지 않음)
+    $header_image_col = sql_query("SHOW COLUMNS FROM {$pref_table} LIKE 'header_image'", false);
+    if ($header_image_col !== false && sql_num_rows($header_image_col) == 0) {
+        sql_query("ALTER TABLE {$pref_table} ADD COLUMN header_image longtext AFTER theme", false);
+    }
+    if ($header_image_col && function_exists('sql_free_result')) {
+        sql_free_result($header_image_col);
+    }
 }
