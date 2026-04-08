@@ -150,8 +150,8 @@ ob_start();
     <?php endif; ?>
     <?php
     $_himg_src    = $_global_header_image ? htmlspecialchars($_global_header_image['src'], ENT_QUOTES, 'UTF-8') : '';
-    $_himg_height = $_global_header_image ? intval($_global_header_image['height'] ?? 160) : 160;
-    $_himg_fit    = $_global_header_image ? htmlspecialchars($_global_header_image['fit'] ?? 'cover', ENT_QUOTES, 'UTF-8') : 'cover';
+    $_himg_height = $_global_header_image ? intval(isset($_global_header_image['height']) ? $_global_header_image['height'] : 160) : 160;
+    $_himg_fit    = $_global_header_image ? htmlspecialchars(isset($_global_header_image['fit']) ? $_global_header_image['fit'] : 'cover', ENT_QUOTES, 'UTF-8') : 'cover';
     $_himg_style  = $_global_header_image
         ? 'height:'.$_himg_height.'px;object-fit:'.$_himg_fit.';'
         : 'display:none;';
@@ -511,6 +511,7 @@ CalendarBoard.init({
   save_action_url: '<?php echo $_skin_url; ?>/ajax_event_save.php',
   copy_action_url: '<?php echo $_skin_url; ?>/copy_event.php',
   delete_action_url: '<?php echo $_skin_url; ?>/delete_event.php',
-  pref_url: '<?php echo $_skin_url; ?>/ajax_pref.php'
+  pref_url: '<?php echo $_skin_url; ?>/ajax_pref.php',
+  header_upload_url: '<?php echo $_skin_url; ?>/ajax_header_upload.php'
 });
 </script>

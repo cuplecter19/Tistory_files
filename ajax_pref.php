@@ -14,6 +14,45 @@ $pref_table = $g5['prefix'].'calendar_user_pref';
 $mb_id = $is_member ? $member['mb_id'] : '';
 
 $VALID_THEMES = array('sakura','ocean','melon','kuromi','mocha','lemon');
+$HEADER_UPLOAD_REL_DIR = '/data/calendar_header/';
+
+function cal_starts_with($text, $prefix) {
+    return strpos($text, $prefix) === 0;
+}
+
+function cal_is_local_header_src($src, $upload_rel_dir) {
+    if (!is_string($src) || $src === '') return false;
+    $prefixes = array(
+        rtrim(G5_DATA_URL, '/').'/calendar_header/',
+        rtrim(G5_URL, '/').$upload_rel_dir,
+        $upload_rel_dir
+    );
+    foreach ($prefixes as $prefix) {
+        if (cal_starts_with($src, $prefix)) return true;
+    }
+    return false;
+}
+
+function cal_remove_local_header_file($src, $upload_rel_dir) {
+    if (!cal_is_local_header_src($src, $upload_rel_dir)) return;
+
+    $base_data_url = rtrim(G5_DATA_URL, '/');
+    $base_site_url = rtrim(G5_URL, '/');
+    $relative = $src;
+    if (cal_starts_with($src, $base_data_url.'/')) {
+        $relative = '/'.ltrim(substr($src, strlen($base_data_url)), '/');
+    } else if (cal_starts_with($src, $base_site_url.'/')) {
+        $relative = '/'.ltrim(substr($src, strlen($base_site_url)), '/');
+    }
+
+    if (!cal_starts_with($relative, $upload_rel_dir)) return;
+
+    $target = rtrim(G5_PATH, '/').$relative;
+    $base_dir = rtrim(G5_PATH, '/').$upload_rel_dir;
+    if (!cal_starts_with($target, $base_dir)) return;
+    if (strpos($target, '..') !== false) return;
+    if (is_file($target)) @unlink($target);
+}
 
 /* ── GET: 설정 불러오기 (로그인 불필요 – 헤더 이미지는 전역 공유) ── */
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -85,10 +124,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $parsed = json_decode($header_image_raw, true);
             if (is_array($parsed) && isset($parsed['src'])) {
                 $src = $parsed['src'];
-                // Validate src: must be a URL with proper hostname or a data URI
-                $is_valid_url = preg_match('/^https?:\/\/[a-zA-Z0-9][\w\.\-]*\.[a-zA-Z]{2,}/i', $src);
+                // Validate src: must be URL/data URI/or local uploaded file URL
+                $is_valid_url = filter_var($src, FILTER_VALIDATE_URL) !== false;
                 $is_data_uri  = preg_match('/^data:image\//i', $src);
-                if ($is_valid_url || $is_data_uri) {
+                $is_local_file = cal_is_local_header_src($src, $HEADER_UPLOAD_REL_DIR);
+                if ($is_valid_url || $is_data_uri || $is_local_file) {
                     $safe = array(
                         'src' => $src,
                         'type' => isset($parsed['type']) && in_array($parsed['type'], array('url','file')) ? $parsed['type'] : 'url',
@@ -105,7 +145,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // 전역 설정 UPSERT (__global__ 레코드)
-        $global_existing = sql_fetch("SELECT mb_id FROM {$pref_table} WHERE mb_id='__global__'");
+        $global_existing = sql_fetch("SELECT mb_id, header_image FROM {$pref_table} WHERE mb_id='__global__'");
+        $old_src = '';
+        if ($global_existing && !empty($global_existing['header_image'])) {
+            $old_data = json_decode($global_existing['header_image'], true);
+            if (is_array($old_data) && !empty($old_data['src'])) {
+                $old_src = $old_data['src'];
+            }
+        }
+
+        $new_src = '';
+        if ($header_image_json) {
+            $new_data = json_decode($header_image_json, true);
+            if (is_array($new_data) && !empty($new_data['src'])) {
+                $new_src = $new_data['src'];
+            }
+        }
+
+        if ($old_src && $old_src !== $new_src) {
+            cal_remove_local_header_file($old_src, $HEADER_UPLOAD_REL_DIR);
+        }
+
         $himg_val = $header_image_json ? "'".sql_real_escape_string($header_image_json)."'" : "NULL";
         if ($global_existing && $global_existing['mb_id']) {
             sql_query("UPDATE {$pref_table} SET header_image={$himg_val}, updated_at=NOW() WHERE mb_id='__global__'");
