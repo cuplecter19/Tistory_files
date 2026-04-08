@@ -14,6 +14,7 @@ if (!defined('_GNUBOARD_')) {
 }
 if (!defined('_GNUBOARD_')) exit;
 
+// 관리자가 아니어도 위젯을 보여주고 싶으면 아래 줄 삭제
 if (!$is_admin) return;
 
 // 위젯 설정
