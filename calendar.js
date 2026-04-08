@@ -4,19 +4,21 @@ var CalendarBoard = (function() {
   var recentColors = [];
   var COLOR_STORAGE_KEY = 'cal_recent_colors';
   var THEME_STORAGE_KEY = 'cal_theme';
-  var HIMG_STORAGE_KEY  = 'cal_header_image';
   var MAX_RECENT_COLORS = 12;
   var formsBound = false;
   var currentSelectedDay = null;
+  var headerImageData = null;
 
   var VALID_THEMES = ['sakura', 'ocean', 'melon', 'kuromi', 'mocha', 'lemon'];
 
   var pendingFileData = null;
+  var pendingFileObject = null;
 
   function q(id){ return document.getElementById(id); }
 
   function init(opts){
     config = opts || config || {};
+    headerImageData = normalizeHeaderImageData(config.initial_header_image);
     loadRecentColors();
     applyStoredTheme();
     applyStoredHeaderImage();
@@ -55,18 +57,27 @@ var CalendarBoard = (function() {
   /* ══════════════════════════
      헤더 이미지 관리
      ══════════════════════════ */
+  function normalizeHeaderImageData(data){
+    if (!data || !data.src) return null;
+    var fit = data.fit || 'cover';
+    if (fit !== 'cover' && fit !== 'contain' && fit !== 'fill') fit = 'cover';
+    var height = parseInt(data.height, 10) || 160;
+    if (height < 60) height = 60;
+    if (height > 400) height = 400;
+    return {
+      src: data.src,
+      type: data.type || 'url',
+      height: height,
+      fit: fit
+    };
+  }
+
   function getHeaderImageData(){
-    try {
-      var raw = localStorage.getItem(HIMG_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch(e){ return null; }
+    return headerImageData;
   }
 
   function saveHeaderImageData(data){
-    try {
-      if (data) localStorage.setItem(HIMG_STORAGE_KEY, JSON.stringify(data));
-      else localStorage.removeItem(HIMG_STORAGE_KEY);
-    } catch(e){}
+    headerImageData = normalizeHeaderImageData(data);
   }
 
   function applyStoredHeaderImage(){
@@ -144,6 +155,7 @@ var CalendarBoard = (function() {
   function handleFileSelect(file){
     if (!file || !file.type.match(/^image\//)) { alert('이미지 파일만 선택 가능합니다.'); return; }
     if (file.size > 5 * 1024 * 1024) { alert('5MB 이하의 이미지만 사용할 수 있습니다.'); return; }
+    pendingFileObject = file;
     var reader = new FileReader();
     reader.onload = function(e){
       pendingFileData = e.target.result;
@@ -267,8 +279,7 @@ var CalendarBoard = (function() {
 
     if (closest(t, '#btn-header-img-remove')) {
       e.preventDefault(); e.stopPropagation();
-      saveHeaderImageData(null);
-      applyStoredHeaderImage();
+      removeHeaderImageFromServer();
       return;
     }
 
@@ -403,6 +414,7 @@ var CalendarBoard = (function() {
   function openImageModal(){
     var m = q('cal-img-modal'); if (!m) return;
     pendingFileData = null;
+    pendingFileObject = null;
     var data = getHeaderImageData();
     var urlInput = q('cal-img-url-input');
     var heightInput = q('cal-img-height-input');
@@ -429,9 +441,12 @@ var CalendarBoard = (function() {
     if (m) m.style.display = 'none';
     document.body.classList.remove('modal-open');
     pendingFileData = null;
+    pendingFileObject = null;
   }
 
   function handleImageSave(){
+    var saveBtn = q('btn-img-save');
+    var originalText = saveBtn ? saveBtn.textContent : '적용';
     var heightInput = q('cal-img-height-input');
     var fitSelect = q('cal-img-fit-select');
     var height = heightInput ? parseInt(heightInput.value, 10) || 160 : 160;
@@ -444,7 +459,7 @@ var CalendarBoard = (function() {
 
     var src = '';
     var type = '';
-    if (tabName === 'file' && pendingFileData) {
+    if (tabName === 'file' && pendingFileData && pendingFileObject) {
       src = pendingFileData;
       type = 'file';
     } else {
@@ -454,15 +469,64 @@ var CalendarBoard = (function() {
     }
 
     if (!src) {
-      saveHeaderImageData(null);
-      applyStoredHeaderImage();
-      closeImageModal();
+      removeHeaderImageFromServer();
       return;
     }
 
-    saveHeaderImageData({ src: src, type: type, height: height, fit: fit });
-    applyStoredHeaderImage();
-    closeImageModal();
+    if (type === 'url' && !/^https?:\/\/.+/i.test(src)) {
+      alert('올바른 이미지 URL을 입력하세요.');
+      return;
+    }
+    if (type === 'file' && !pendingFileObject) {
+      alert('업로드할 이미지를 선택하세요.');
+      return;
+    }
+
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '저장 중...'; }
+    saveHeaderImageToServer({
+      type: type,
+      src: src,
+      file: pendingFileObject,
+      height: height,
+      fit: fit
+    }, function(ok, r){
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = originalText; }
+      if (ok && r && r.success) {
+        saveHeaderImageData(r.data || null);
+        applyStoredHeaderImage();
+        closeImageModal();
+      } else {
+        alert('헤더 이미지 저장 실패: ' + (r && r.error ? r.error : '알 수 없는 오류'));
+      }
+    });
+  }
+
+  function saveHeaderImageToServer(payload, callback){
+    var formData = new FormData();
+    formData.append('bo_table', config.bo_table || '');
+    formData.append('action', 'save');
+    formData.append('type', payload.type || 'url');
+    formData.append('height', String(payload.height || 160));
+    formData.append('fit', payload.fit || 'cover');
+    if (payload.type === 'file' && payload.file) {
+      formData.append('image_file', payload.file);
+    } else {
+      formData.append('image_url', payload.src || '');
+    }
+    ajaxPostFormData(config.header_image_action_url, formData, callback);
+  }
+
+  function removeHeaderImageFromServer(){
+    var params = 'bo_table=' + encodeURIComponent(config.bo_table || '') + '&action=remove';
+    ajaxPost(config.header_image_action_url, params, function(ok, r){
+      if (ok && r && r.success) {
+        saveHeaderImageData(null);
+        applyStoredHeaderImage();
+        closeImageModal();
+      } else {
+        alert('헤더 이미지 삭제 실패: ' + (r && r.error ? r.error : '알 수 없는 오류'));
+      }
+    });
   }
 
   /* ══════════════════════════
@@ -766,6 +830,22 @@ var CalendarBoard = (function() {
       }
     };
     xhr.send(params);
+  }
+
+  function ajaxPostFormData(url, formData, callback){
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState === 4) {
+        if (xhr.status === 200) {
+          try { callback(true, JSON.parse(xhr.responseText)); } catch(ex){ callback(false, {error:'서버 응답 파싱 오류'}); }
+        } else {
+          callback(false, {error:'HTTP ' + xhr.status});
+        }
+      }
+    };
+    xhr.send(formData);
   }
 
   function serializeForm(container){

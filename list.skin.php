@@ -103,6 +103,32 @@ $today_url=$base_url;
 $google_refresh_url=$_skin_url.'/google_calendar.php?bo_table='.$bo_table.'&cal_year='.$cal_year.'&cal_month='.$cal_month;
 $google_auth_url=$_skin_url.'/google_oauth_start.php?bo_table='.$bo_table;
 
+$header_image_data = null;
+$header_data_dir = defined('G5_DATA_PATH') ? rtrim(G5_DATA_PATH, '/').'/calendar_header' : '';
+if ($header_data_dir) {
+    $safe_bo_table = preg_replace('/[^a-z0-9_]/i','', $bo_table);
+    $header_meta_file = $header_data_dir.'/'.$safe_bo_table.'.json';
+    if (is_file($header_meta_file)) {
+        $raw_header = @file_get_contents($header_meta_file);
+        if ($raw_header !== false && $raw_header !== '') {
+            $decoded_header = json_decode($raw_header, true);
+            if (is_array($decoded_header) && !empty($decoded_header['src'])) {
+                $fit_val = isset($decoded_header['fit']) ? $decoded_header['fit'] : 'cover';
+                if (!in_array($fit_val, array('cover','contain','fill'))) $fit_val = 'cover';
+                $height_val = isset($decoded_header['height']) ? intval($decoded_header['height']) : 160;
+                if ($height_val < 60) $height_val = 60;
+                if ($height_val > 400) $height_val = 400;
+                $header_image_data = array(
+                    'src'    => $decoded_header['src'],
+                    'type'   => isset($decoded_header['type']) ? $decoded_header['type'] : 'url',
+                    'height' => $height_val,
+                    'fit'    => $fit_val
+                );
+            }
+        }
+    }
+}
+
 $weekday_labels = array('일','월','화','수','목','금','토');
 
 ob_start();
@@ -480,6 +506,8 @@ CalendarBoard.init({
   google_refresh_url: '<?php echo $google_refresh_url; ?>',
   save_action_url: '<?php echo $_skin_url; ?>/ajax_event_save.php',
   copy_action_url: '<?php echo $_skin_url; ?>/copy_event.php',
-  delete_action_url: '<?php echo $_skin_url; ?>/delete_event.php'
+  delete_action_url: '<?php echo $_skin_url; ?>/delete_event.php',
+  header_image_action_url: '<?php echo $_skin_url; ?>/ajax_header_image.php',
+  initial_header_image: <?php echo $header_image_data ? json_encode($header_image_data) : 'null'; ?>
 });
 </script>
