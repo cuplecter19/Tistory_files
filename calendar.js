@@ -26,6 +26,7 @@ var CalendarBoard = (function() {
     bindGoogleAuthTopNavigation();
     bindGoogleRefresh();
     bindImageModal();
+    bindDdayTypeRadios();
     if (!formsBound) { formsBound = true; }
   }
 
@@ -212,6 +213,18 @@ var CalendarBoard = (function() {
     return diff === 0 ? 'D-Day!' : 'D-' + diff;
   }
 
+  /* D-day 기념일 계산 헬퍼 (과거도 D+N으로 표시) */
+  function calcDdayAnniversary(dateStr) {
+    if (!dateStr) return null;
+    var today = new Date();
+    today.setHours(0,0,0,0);
+    var target = new Date(dateStr + 'T00:00:00');
+    var diff = Math.round((target - today) / 86400000);
+    if (diff === 0) return 'D-Day!';
+    if (diff > 0) return 'D-' + diff;
+    return 'D+' + Math.abs(diff);
+  }
+
   function isDdayPast(dateStr) {
     if (!dateStr) return true;
     var today = new Date();
@@ -271,7 +284,16 @@ var CalendarBoard = (function() {
     // Goal 모달 열기
     if (closest(t, '#btn-open-goals')) {
       e.preventDefault(); e.stopPropagation();
-      openGoalModal(); return;
+      openDdayModal('goal'); return;
+    }
+
+    // Goal 모달 탭 전환
+    var ddayTab = closest(t, '.cal-dday-tab');
+    if (ddayTab) {
+      e.preventDefault(); e.stopPropagation();
+      var tabName = ddayTab.getAttribute('data-dday-tab');
+      if (tabName) openDdayModal(tabName);
+      return;
     }
 
     // Goal 모달 닫기
@@ -307,7 +329,9 @@ var CalendarBoard = (function() {
         color: editBtn.getAttribute('data-color') || '#3B82F6',
         time_start: editBtn.getAttribute('data-time-start') || '',
         time_end: editBtn.getAttribute('data-time-end') || '',
-        is_goal: editBtn.getAttribute('data-is-goal') === 'true' || editBtn.getAttribute('data-is-goal') === '1'
+        is_goal: editBtn.getAttribute('data-is-goal') === 'true' || editBtn.getAttribute('data-is-goal') === '1',
+        is_dday: editBtn.getAttribute('data-is-dday') === 'true' || editBtn.getAttribute('data-is-dday') === '1',
+        is_widget: editBtn.getAttribute('data-is-widget') === 'true' || editBtn.getAttribute('data-is-widget') === '1'
       });
       return;
     }
@@ -332,7 +356,9 @@ var CalendarBoard = (function() {
         color: viewBtn.getAttribute('data-color') || '#3B82F6',
         time_start: viewBtn.getAttribute('data-time-start') || '',
         time_end: viewBtn.getAttribute('data-time-end') || '',
-        is_goal: viewBtn.getAttribute('data-is-goal') === 'true' || viewBtn.getAttribute('data-is-goal') === '1'
+        is_goal: viewBtn.getAttribute('data-is-goal') === 'true' || viewBtn.getAttribute('data-is-goal') === '1',
+        is_dday: viewBtn.getAttribute('data-is-dday') === 'true' || viewBtn.getAttribute('data-is-dday') === '1',
+        is_widget: viewBtn.getAttribute('data-is-widget') === 'true' || viewBtn.getAttribute('data-is-widget') === '1'
       });
       return;
     }
@@ -440,13 +466,26 @@ var CalendarBoard = (function() {
   }
 
   /* ══════════════════════════
-     Goal 모달
+     D-day 통합 모달 (Goal + D-day 탭)
      ══════════════════════════ */
-  function openGoalModal(){
+  function openDdayModal(tabName){
     var m = q('cal-goal-modal'); if (!m) return;
+    // 탭 전환
+    var tabs = m.querySelectorAll('.cal-dday-tab');
+    var panels = m.querySelectorAll('.cal-dday-tab-panel');
+    var targetTab = tabName || 'goal';
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].classList.toggle('active', tabs[i].getAttribute('data-dday-tab') === targetTab);
+    }
+    var goalPanel = q('cal-dday-tab-goal');
+    var ddayPanel = q('cal-dday-tab-dday');
+    if (goalPanel) goalPanel.style.display = targetTab === 'goal' ? '' : 'none';
+    if (ddayPanel) ddayPanel.style.display = targetTab === 'dday' ? '' : 'none';
     m.style.display = 'block';
     document.body.classList.add('modal-open');
   }
+
+  function openGoalModal(){ openDdayModal('goal'); }
 
   function closeGoalModal(){
     var m = q('cal-goal-modal');
@@ -496,6 +535,12 @@ var CalendarBoard = (function() {
             var ddayClass = ddayText === 'D-Day!' ? 'cal-detail-goal-badge dday-today' : 'cal-detail-goal-badge';
             goalBadge = '<span class="' + ddayClass + '">' + esc(ddayText) + '</span>';
           }
+        } else if (e.is_dday) {
+          var ddayAnnText = calcDdayAnniversary(e.date);
+          if (ddayAnnText) {
+            var ddayAnnClass = 'cal-detail-dday-badge' + (ddayAnnText === 'D-Day!' ? ' dday-today' : '');
+            goalBadge = '<span class="' + ddayAnnClass + '">' + esc(ddayAnnText) + '</span>';
+          }
         }
 
         html += '<div class="cal-detail-item">';
@@ -505,10 +550,10 @@ var CalendarBoard = (function() {
         if (timeStr) html += '<div class="cal-detail-desc">' + esc(timeStr) + '</div>';
         if (e.preview) html += '<div class="cal-detail-desc">' + esc(e.preview) + '</div>';
         html += '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">';
-        html += '<button type="button" class="cal-btn cal-btn-mini js-edit" data-wr-id="'+esc(String(e.id))+'" data-subject="'+esc(e.subject||'')+'" data-content="'+esc(e.content||'')+'" data-date="'+esc(e.date||'')+'" data-end-date="'+esc(e.end_date||'')+'" data-color="'+esc(e.color||'#3B82F6')+'" data-time-start="'+esc(e.time_start||'')+'" data-time-end="'+esc(e.time_end||'')+'" data-is-goal="'+esc(String(!!e.is_goal))+'">수정</button>';
+        html += '<button type="button" class="cal-btn cal-btn-mini js-edit" data-wr-id="'+esc(String(e.id))+'" data-subject="'+esc(e.subject||'')+'" data-content="'+esc(e.content||'')+'" data-date="'+esc(e.date||'')+'" data-end-date="'+esc(e.end_date||'')+'" data-color="'+esc(e.color||'#3B82F6')+'" data-time-start="'+esc(e.time_start||'')+'" data-time-end="'+esc(e.time_end||'')+'" data-is-goal="'+esc(String(!!e.is_goal))+'" data-is-dday="'+esc(String(!!e.is_dday))+'" data-is-widget="'+esc(String(!!e.is_widget))+'">수정</button>';
         html += '<button type="button" class="cal-btn cal-btn-mini js-copy" data-id="'+esc(String(e.id))+'">복사</button>';
         html += '<button type="button" class="cal-btn cal-btn-mini cal-btn-danger js-delete" data-id="'+esc(String(e.id))+'">삭제</button>';
-        html += '<button type="button" class="cal-btn cal-btn-mini js-view" data-wr-id="'+esc(String(e.id))+'" data-subject="'+esc(e.subject||'')+'" data-content="'+esc(e.content||'')+'" data-date="'+esc(e.date||'')+'" data-end-date="'+esc(e.end_date||'')+'" data-color="'+esc(e.color||'#3B82F6')+'" data-time-start="'+esc(e.time_start||'')+'" data-time-end="'+esc(e.time_end||'')+'" data-is-goal="'+esc(String(!!e.is_goal))+'">상세</button>';
+        html += '<button type="button" class="cal-btn cal-btn-mini js-view" data-wr-id="'+esc(String(e.id))+'" data-subject="'+esc(e.subject||'')+'" data-content="'+esc(e.content||'')+'" data-date="'+esc(e.date||'')+'" data-end-date="'+esc(e.end_date||'')+'" data-color="'+esc(e.color||'#3B82F6')+'" data-time-start="'+esc(e.time_start||'')+'" data-time-end="'+esc(e.time_end||'')+'" data-is-goal="'+esc(String(!!e.is_goal))+'" data-is-dday="'+esc(String(!!e.is_dday))+'" data-is-widget="'+esc(String(!!e.is_widget))+'">상세</button>';
         html += '</div></div></div>';
       }
     }
@@ -531,7 +576,7 @@ var CalendarBoard = (function() {
       dateEl.textContent = dateText + (timeText ? '  ' + timeText : '');
     }
 
-    // Goal badge in view modal
+    // Goal/D-day badge in view modal
     var goalBadgeEl = q('cal-view-goal-badge');
     if (goalBadgeEl) {
       if (ev.is_goal) {
@@ -539,6 +584,15 @@ var CalendarBoard = (function() {
         if (ddayText) {
           goalBadgeEl.textContent = '⚑ ' + ddayText;
           goalBadgeEl.className = 'cal-view-goal-badge' + (ddayText === 'D-Day!' ? ' dday-today' : '');
+          goalBadgeEl.style.display = '';
+        } else {
+          goalBadgeEl.style.display = 'none';
+        }
+      } else if (ev.is_dday) {
+        var ddayAnnText = calcDdayAnniversary(ev.date);
+        if (ddayAnnText) {
+          goalBadgeEl.textContent = '◈ ' + ddayAnnText;
+          goalBadgeEl.className = 'cal-view-dday-badge' + (ddayAnnText === 'D-Day!' ? ' dday-today' : '');
           goalBadgeEl.style.display = '';
         } else {
           goalBadgeEl.style.display = 'none';
@@ -561,6 +615,8 @@ var CalendarBoard = (function() {
       editBtn.setAttribute('data-time-start',ev.time_start||'');
       editBtn.setAttribute('data-time-end',ev.time_end||'');
       editBtn.setAttribute('data-is-goal', ev.is_goal ? 'true' : 'false');
+      editBtn.setAttribute('data-is-dday', ev.is_dday ? 'true' : 'false');
+      editBtn.setAttribute('data-is-widget', ev.is_widget ? 'true' : 'false');
     }
     var delBtn = m.querySelector('#btn-view-delete'); if (delBtn) delBtn.setAttribute('data-id', ev.id || '');
     m._viewData = ev;
@@ -582,11 +638,26 @@ var CalendarBoard = (function() {
     q('modal_wr_7').value = (ev && ev.time_end) ? ev.time_end : '';
     q('modal_wr_3').value = (ev && ev.color) ? ev.color : '#3B82F6';
 
-    // Goal 체크박스
-    var goalChk = q('modal_cal_goal');
-    if (goalChk) {
-      goalChk.checked = (ev && ev.is_goal) ? true : false;
+    // D-day 타입 라디오 버튼
+    var radioNone = q('modal_dday_type_none');
+    var radioGoal = q('modal_dday_type_goal');
+    var radioDday = q('modal_dday_type_dday');
+    if (radioNone && radioGoal && radioDday) {
+      if (ev && ev.is_goal) {
+        radioGoal.checked = true;
+      } else if (ev && ev.is_dday) {
+        radioDday.checked = true;
+      } else {
+        radioNone.checked = true;
+      }
     }
+
+    // 위젯 체크박스
+    var widgetChk = q('modal_cal_widget');
+    if (widgetChk) widgetChk.checked = (ev && ev.is_widget) ? true : false;
+
+    // 위젯 행 표시 여부
+    updateWidgetRowVisibility();
 
     var repeatChk = q('modal_cal_repeat'); if (repeatChk) repeatChk.checked = false;
     var titleEl = m.querySelector('.cal-modal-header h3'); if (titleEl) titleEl.textContent = mode === 'u' ? '일정 수정' : '일정 추가';
@@ -595,6 +666,25 @@ var CalendarBoard = (function() {
     m.style.display = 'block'; document.body.classList.add('modal-open');
   }
   function closeWriteModal(){ var m = q('cal-modal'); if(m) m.style.display = 'none'; document.body.classList.remove('modal-open'); }
+
+  function updateWidgetRowVisibility(){
+    var radioNone = q('modal_dday_type_none');
+    var widgetRow = q('modal_widget_row');
+    if (!widgetRow) return;
+    var isNone = radioNone ? radioNone.checked : true;
+    widgetRow.style.display = isNone ? 'none' : '';
+    if (isNone) {
+      var widgetChk = q('modal_cal_widget');
+      if (widgetChk) widgetChk.checked = false;
+    }
+  }
+
+  function bindDdayTypeRadios(){
+    var radios = document.querySelectorAll('input[name="cal_dday_type"]');
+    for (var i = 0; i < radios.length; i++) {
+      radios[i].addEventListener('change', updateWidgetRowVisibility);
+    }
+  }
 
   function openCopyModal(id){
     var m = q('cal-copy-modal'); if(!m) return;
@@ -616,11 +706,31 @@ var CalendarBoard = (function() {
     saveRecentColor(colorVal);
     var saveBtn = q('btn-save-event'); var origText = saveBtn ? saveBtn.textContent : '저장';
     if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '저장 중...'; }
+
+    // 라디오 버튼 값을 cal_goal/cal_dday 파라미터로 변환
+    var radioGoal = q('modal_dday_type_goal');
+    var radioDday = q('modal_dday_type_dday');
+    var calGoalHidden = q('_hidden_cal_goal');
+    var calDdayHidden = q('_hidden_cal_dday');
+    var form = q('cal-modal-form');
+    if (form && !calGoalHidden) {
+      calGoalHidden = document.createElement('input');
+      calGoalHidden.type = 'hidden'; calGoalHidden.id = '_hidden_cal_goal'; calGoalHidden.name = 'cal_goal';
+      form.appendChild(calGoalHidden);
+    }
+    if (form && !calDdayHidden) {
+      calDdayHidden = document.createElement('input');
+      calDdayHidden.type = 'hidden'; calDdayHidden.id = '_hidden_cal_dday'; calDdayHidden.name = 'cal_dday';
+      form.appendChild(calDdayHidden);
+    }
+    if (calGoalHidden) calGoalHidden.value = (radioGoal && radioGoal.checked) ? '1' : '';
+    if (calDdayHidden) calDdayHidden.value = (radioDday && radioDday.checked) ? '1' : '';
+
     var params = serializeForm(q('cal-modal-form'));
     ajaxPost(config.save_action_url, params, function(ok, r){
       if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = origText; }
       if (ok && r.success) { closeWriteModal(); refreshCalendarAjax(); }
-      else alert('저장 실패: ' + (r && r.error ? r.error : '��� 수 없는 오류'));
+      else alert('저장 실패: ' + (r && r.error ? r.error : '알 수 없는 오류'));
     });
   }
   function handleCopyExec(){

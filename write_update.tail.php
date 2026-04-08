@@ -21,6 +21,15 @@ if ($w == '' && isset($_POST['cal_repeat']) && $_POST['cal_repeat']=='1') {
 
                 $new_end = $diff_days>0 ? date('Y-m-d', strtotime($new_start.' +'.$diff_days.' days')) : $new_start;
 
+                // wr_9: 원본의 GOAL/DDAY/WIDGET 플래그 보존 + REPEAT 정보 추가
+                $src_wr9_base = $src['wr_9'] ? $src['wr_9'] : '';
+                $repeat_wr9_parts = array();
+                if (strpos($src_wr9_base, 'GOAL=1') !== false) $repeat_wr9_parts[] = 'GOAL=1';
+                if (strpos($src_wr9_base, 'DDAY=1') !== false) $repeat_wr9_parts[] = 'DDAY=1';
+                if (strpos($src_wr9_base, 'WIDGET=1') !== false) $repeat_wr9_parts[] = 'WIDGET=1';
+                $repeat_wr9_parts[] = 'FREQ='.strtoupper($repeat_type).';COUNT='.intval($repeat_count);
+                $new_repeat_wr9 = implode(';', $repeat_wr9_parts);
+
                 sql_query("INSERT INTO {$write_table}
                   SET wr_num=(SELECT IFNULL(MIN(t.wr_num),0)-1 FROM {$write_table} t),
                       wr_reply='', wr_comment=0, wr_comment_reply='',
@@ -45,7 +54,7 @@ if ($w == '' && isset($_POST['cal_repeat']) && $_POST['cal_repeat']=='1') {
                       wr_6='".sql_real_escape_string($src['wr_6'])."',
                       wr_7='".sql_real_escape_string($src['wr_7'])."',
                       wr_8='".sql_real_escape_string($src['wr_8'])."',
-                      wr_9='FREQ=".strtoupper($repeat_type).";COUNT=".intval($repeat_count)."',
+                      wr_9='".sql_real_escape_string($new_repeat_wr9)."',
                       wr_is_comment=0");
                 $new_wr_id = sql_insert_id();
                 if ($new_wr_id) sql_query("UPDATE {$write_table} SET wr_parent='{$new_wr_id}' WHERE wr_id='{$new_wr_id}'");

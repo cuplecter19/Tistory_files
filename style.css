@@ -935,3 +935,167 @@ body.modal-open { overflow:hidden !important; }
   font-size: 12px;
   color: var(--cal-text-muted);
 }
+/* ══════════════════════════════════════
+   D-day 기념일 타입 – 추가 스타일
+   ══════════════════════════════════════ */
+
+/* ── D-day 라디오 버튼 그룹 ── */
+.cal-dday-type-row {
+  grid-template-columns: auto 1fr 1fr 1fr !important;
+  align-items: center;
+  gap: 10px !important;
+}
+.cal-label-text {
+  font-size: 12px;
+  color: var(--cal-text-sub);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.cal-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--cal-text);
+  cursor: pointer;
+  font-weight: 500;
+}
+.cal-radio-label input[type="radio"] {
+  width: 15px;
+  height: 15px;
+  accent-color: #007aff;
+  cursor: pointer;
+}
+#modal_dday_type_goal ~ span,
+.cal-radio-label:has(#modal_dday_type_goal) {
+  accent-color: #af52de;
+}
+
+/* ── 위젯 표시 체크박스 행 ── */
+.cal-widget-row {
+  grid-template-columns: 1fr !important;
+  gap: 2px !important;
+}
+.cal-widget-row .cal-goal-check input[type="checkbox"] {
+  accent-color: #007aff;
+}
+
+/* ── 날짜 셀 D-day 아이콘 ── */
+.cal-day-dday-flag {
+  position: absolute;
+  top: 2px;
+  right: 16px;
+  font-size: 9px;
+  line-height: 1;
+  color: #007aff;
+  opacity: 0.7;
+}
+.cal-day-dday .cal-day-dday-flag {
+  opacity: 1;
+}
+
+/* ── 툴팁 내 D-day 배지 ── */
+.cal-tooltip-dday {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  color: #007aff;
+  background: rgba(0,122,255,0.12);
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+/* ── 상세보기 모달 D-day 배지 ── */
+.cal-view-dday-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #007aff;
+  background: rgba(0,122,255,0.10);
+  padding: 3px 10px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+.cal-view-dday-badge.dday-today {
+  color: #ff3b30;
+  background: rgba(255,59,48,0.08);
+}
+
+/* ── 상세 패널 D-day 배지 ── */
+.cal-detail-dday-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #007aff;
+  background: rgba(0,122,255,0.10);
+  padding: 2px 7px;
+  border-radius: 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.cal-detail-dday-badge.dday-today {
+  color: #ff3b30;
+  background: rgba(255,59,48,0.08);
+}
+
+/* ── D-day 통합 모달 탭 UI ── */
+.cal-dday-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--cal-border);
+  padding: 0 16px;
+  margin-top: -4px;
+}
+.cal-dday-tab {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cal-text-sub);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+}
+.cal-dday-tab:hover {
+  color: var(--cal-text);
+}
+.cal-dday-tab.active {
+  color: #007aff;
+  border-bottom-color: #007aff;
+}
+.cal-dday-tab-panel {
+  padding: 0;
+}
+
+/* ── D-day 기념일 카드 (Goal 카드와 구분) ── */
+.cal-goal-card-dday-type .cal-goal-card-dday {
+  color: #007aff;
+}
+.cal-goal-card-dday-type .cal-goal-card-dday.dday-past {
+  color: #8e8e93;
+}
+
+/* ── 위젯 D-day 아이콘 및 타입 태그 ── */
+.cw-float-goal-type-tag {
+  font-size: 10px;
+  margin: 0 4px;
+  flex-shrink: 0;
+  color: #af52de;
+  opacity: 0.7;
+}
+.cw-float-dday-tag {
+  color: #007aff;
+}
+.cw-float-dday-item .cw-float-goal-dday {
+  color: #007aff;
+}
+.cw-float-dday-past {
+  color: #8e8e93 !important;
+}
+.cw-float-dday-future {
+  color: #007aff;
+}

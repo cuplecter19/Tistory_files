@@ -73,6 +73,29 @@ while ($grow = sql_fetch_array($goal_res)) {
     $goal_list[] = $grow;
 }
 
+// D-day 기념일 목록 (과거 포함 전부)
+$dday_sql = "SELECT wr_id, wr_subject, wr_1, wr_2, wr_3, wr_9
+             FROM {$write_table}
+             WHERE wr_is_comment=0
+               AND wr_9 LIKE '%DDAY=1%'
+             ORDER BY wr_1 ASC
+             LIMIT 20";
+$dday_res = sql_query($dday_sql);
+$dday_list = array();
+while ($drow = sql_fetch_array($dday_res)) {
+    $target_ts = strtotime($drow['wr_1']);
+    $diff = intval(($target_ts - $today_ts) / 86400);
+    if ($diff > 0) {
+        $drow['_dday_text'] = 'D-'.$diff;
+    } elseif ($diff === 0) {
+        $drow['_dday_text'] = 'D-Day!';
+    } else {
+        $drow['_dday_text'] = 'D+'.abs($diff);
+    }
+    $drow['_dday_diff'] = $diff;
+    $dday_list[] = $drow;
+}
+
 $base_url='./board.php?bo_table='.$bo_table;
 $prev_url=$base_url.'&cal_year='.$prev_year.'&cal_month='.$prev_month;
 $next_url=$base_url.'&cal_year='.$next_year.'&cal_month='.$next_month;
@@ -158,7 +181,7 @@ ob_start();
     <div class="cal-header">
       <div class="cal-header-left"><h2 class="cal-title"><?php echo $cal_year; ?>년 <?php echo $cal_month; ?>월</h2></div>
       <div class="cal-header-right">
-        <button type="button" class="cal-btn" id="btn-open-goals" title="D-day 목표">⚑ Goal</button>
+        <button type="button" class="cal-btn" id="btn-open-goals" title="D-day 관리">D-day</button>
         <a href="<?php echo $google_auth_url; ?>" class="cal-btn" id="btn-google-auth" target="_top" rel="noopener noreferrer">Google 연결</a>
         <a href="<?php echo $google_refresh_url; ?>" class="cal-btn" id="btn-google-refresh">동기화</a>
         <a href="<?php echo $prev_url; ?>" class="cal-btn js-cal-nav">◀</a>
@@ -185,6 +208,7 @@ ob_start();
 
         $is_holiday = false;
         $has_goal = false;
+        $has_dday = false;
         if ($has_event) {
             foreach ($events[$day] as $ev_chk) {
                 if (isset($ev_chk['wr_5']) && $ev_chk['wr_5'] === 'holiday') {
@@ -192,6 +216,9 @@ ob_start();
                 }
                 if (isset($ev_chk['wr_9']) && strpos($ev_chk['wr_9'], 'GOAL=1') !== false) {
                     $has_goal = true;
+                }
+                if (isset($ev_chk['wr_9']) && strpos($ev_chk['wr_9'], 'DDAY=1') !== false) {
+                    $has_dday = true;
                 }
             }
         }
@@ -201,12 +228,15 @@ ob_start();
         if ($has_event) $classes .= ' cal-has-event';
         if ($is_holiday) $classes .= ' cal-day-holiday';
         if ($has_goal) $classes .= ' cal-day-goal';
+        if ($has_dday) $classes .= ' cal-day-dday';
 
         $events_json=array(); $colors=array();
         if($has_event){ foreach($events[$day] as $ev){
           $c = $ev['wr_3'] ? $ev['wr_3'] : '#3B82F6';
           $colors[]=$c;
           $is_goal_ev = (isset($ev['wr_9']) && strpos($ev['wr_9'], 'GOAL=1') !== false) ? true : false;
+          $is_dday_ev = (isset($ev['wr_9']) && strpos($ev['wr_9'], 'DDAY=1') !== false) ? true : false;
+          $is_widget_ev = (isset($ev['wr_9']) && strpos($ev['wr_9'], 'WIDGET=1') !== false) ? true : false;
           $events_json[] = array(
             'id'         => intval($ev['wr_id']),
             'subject'    => $ev['wr_subject'],
@@ -218,7 +248,9 @@ ob_start();
             'type'       => $ev['wr_5'] ? $ev['wr_5'] : 'local',
             'time_start' => $ev['wr_6'],
             'time_end'   => $ev['wr_7'],
-            'is_goal'    => $is_goal_ev
+            'is_goal'    => $is_goal_ev,
+            'is_dday'    => $is_dday_ev,
+            'is_widget'  => $is_widget_ev
           );
         }}
         $colors=array_values(array_unique($colors));
@@ -226,6 +258,7 @@ ob_start();
       <div class="<?php echo $classes; ?>" data-day="<?php echo $day; ?>" data-events="<?php echo htmlspecialchars(json_encode($events_json, JSON_UNESCAPED_UNICODE),ENT_QUOTES,'UTF-8'); ?>">
         <div class="cal-day-num"><?php echo $day; ?></div>
         <?php if($has_goal){ ?><div class="cal-day-goal-flag">⚑</div><?php } ?>
+        <?php if($has_dday){ ?><div class="cal-day-dday-flag">◈</div><?php } ?>
         <?php if($has_event){ ?>
           <div class="cal-day-dots"><?php for($ci=0;$ci<count($colors)&&$ci<4;$ci++){ ?><span class="cal-dot" style="background:<?php echo htmlspecialchars($colors[$ci]); ?>"></span><?php } ?></div>
           <div class="cal-tooltip"><?php
@@ -246,6 +279,18 @@ ob_start();
                   if ($ev_diff >= 0) {
                       $goal_tag = ' <span class="cal-tooltip-goal">' . ($ev_diff === 0 ? 'D-Day!' : 'D-'.$ev_diff) . '</span>';
                   }
+              } elseif (isset($ev['wr_9']) && strpos($ev['wr_9'], 'DDAY=1') !== false) {
+                  $ev_date_ts = strtotime($ev['wr_1']);
+                  $now_ts = strtotime($today_str);
+                  $ev_diff = intval(($ev_date_ts - $now_ts) / 86400);
+                  if ($ev_diff > 0) {
+                      $dday_tag_text = 'D-'.$ev_diff;
+                  } elseif ($ev_diff === 0) {
+                      $dday_tag_text = 'D-Day!';
+                  } else {
+                      $dday_tag_text = 'D+'.abs($ev_diff);
+                  }
+                  $goal_tag = ' <span class="cal-tooltip-dday">'.$dday_tag_text.'</span>';
               }
               echo '<div class="cal-tooltip-line" style="background:'.$bg_rgba.';">'
                  . htmlspecialchars($subj, ENT_QUOTES, 'UTF-8')
@@ -287,10 +332,16 @@ ob_start();
           <label class="cal-label">색상 <input type="color" name="wr_3" id="modal_wr_3" class="cal-input cal-input-color" value="#3B82F6"></label>
           <div id="cal-recent-colors" class="cal-recent-colors"></div>
         </div>
-        <!-- D-day Goal 체크박스 -->
-        <div class="cal-form-row cal-goal-row">
-          <label class="cal-goal-check"><input type="checkbox" name="cal_goal" id="modal_cal_goal" value="1"> <span class="cal-goal-check-label">⚑ D-day 목표로 설정</span></label>
-          <span class="cal-goal-hint">당일이 지나면 자동으로 사라집니다</span>
+        <!-- D-day 타입 라디오 버튼 -->
+        <div class="cal-form-row cal-dday-type-row">
+          <span class="cal-label-text">타입</span>
+          <label class="cal-radio-label"><input type="radio" name="cal_dday_type" id="modal_dday_type_none" value="none" checked> 없음</label>
+          <label class="cal-radio-label"><input type="radio" name="cal_dday_type" id="modal_dday_type_goal" value="goal"> ⚑ Goal</label>
+          <label class="cal-radio-label"><input type="radio" name="cal_dday_type" id="modal_dday_type_dday" value="dday"> ◈ D-day</label>
+        </div>
+        <!-- 위젯 표시 여부 -->
+        <div class="cal-form-row cal-widget-row" id="modal_widget_row" style="display:none;">
+          <label class="cal-goal-check"><input type="checkbox" name="cal_widget" id="modal_cal_widget" value="1"> <span class="cal-goal-check-label">📌 위젯에 표시</span></label>
         </div>
         <div class="cal-form-row cal-repeat-row">
           <label><input type="checkbox" name="cal_repeat" id="modal_cal_repeat" value="1"> 반복</label>
@@ -340,36 +391,71 @@ ob_start();
     </div>
   </div>
 
-  <!-- ═══ D-day Goal 모달 ═══ -->
+  <!-- ═══ D-day 통합 모달 (Goal + D-day 탭) ═══ -->
   <div id="cal-goal-modal" class="cal-modal">
     <div id="cal-goal-backdrop" class="cal-modal-backdrop"></div>
     <div class="cal-modal-content" style="max-width:440px;">
       <div class="cal-modal-header">
-        <h3>⚑ D-day 목표</h3>
+        <h3>📌 D-day 관리</h3>
         <button type="button" id="cal-goal-modal-close">×</button>
       </div>
-      <div class="cal-goal-modal-body">
-        <?php if (empty($goal_list)) { ?>
-          <div class="cal-goal-empty-big">
-            <div class="cal-goal-empty-icon">⚑</div>
-            <p>설정된 D-day 목표가 없습니다.</p>
-            <span>일정 추가 시 'D-day 목표로 설정'을 체크하세요.</span>
-          </div>
-        <?php } else { ?>
-          <?php foreach ($goal_list as $gl) {
-            $gc = $gl['wr_3'] ? $gl['wr_3'] : '#af52de';
-            $bg_rgba = cal_hex_to_rgba($gc, 0.08);
-            $is_dday_today = ($gl['_dday_diff'] === 0);
-          ?>
-          <div class="cal-goal-card<?php if ($is_dday_today) echo ' cal-goal-card-today'; ?>" style="border-left-color:<?php echo htmlspecialchars($gc); ?>; background:<?php echo $bg_rgba; ?>;">
-            <div class="cal-goal-card-info">
-              <div class="cal-goal-card-title"><?php echo htmlspecialchars($gl['wr_subject'], ENT_QUOTES, 'UTF-8'); ?></div>
-              <div class="cal-goal-card-date">📆 <?php echo $gl['wr_1']; ?></div>
+      <!-- 탭 UI -->
+      <div class="cal-dday-tabs">
+        <button type="button" class="cal-dday-tab active" data-dday-tab="goal">⚑ Goal</button>
+        <button type="button" class="cal-dday-tab" data-dday-tab="dday">◈ D-day 기념일</button>
+      </div>
+      <!-- Goal 탭 패널 -->
+      <div class="cal-dday-tab-panel" id="cal-dday-tab-goal">
+        <div class="cal-goal-modal-body">
+          <?php if (empty($goal_list)) { ?>
+            <div class="cal-goal-empty-big">
+              <div class="cal-goal-empty-icon">⚑</div>
+              <p>설정된 D-day 목표가 없습니다.</p>
+              <span>일정 추가 시 'Goal' 타입을 선택하세요.</span>
             </div>
-            <div class="cal-goal-card-dday<?php if ($is_dday_today) echo ' dday-today'; ?>"><?php echo $gl['_dday_text']; ?></div>
-          </div>
+          <?php } else { ?>
+            <?php foreach ($goal_list as $gl) {
+              $gc = $gl['wr_3'] ? $gl['wr_3'] : '#af52de';
+              $bg_rgba = cal_hex_to_rgba($gc, 0.08);
+              $is_dday_today = ($gl['_dday_diff'] === 0);
+            ?>
+            <div class="cal-goal-card<?php if ($is_dday_today) echo ' cal-goal-card-today'; ?>" style="border-left-color:<?php echo htmlspecialchars($gc); ?>; background:<?php echo $bg_rgba; ?>;">
+              <div class="cal-goal-card-info">
+                <div class="cal-goal-card-title"><?php echo htmlspecialchars($gl['wr_subject'], ENT_QUOTES, 'UTF-8'); ?></div>
+                <div class="cal-goal-card-date">📆 <?php echo $gl['wr_1']; ?></div>
+              </div>
+              <div class="cal-goal-card-dday<?php if ($is_dday_today) echo ' dday-today'; ?>"><?php echo $gl['_dday_text']; ?></div>
+            </div>
+            <?php } ?>
           <?php } ?>
-        <?php } ?>
+        </div>
+      </div>
+      <!-- D-day 기념일 탭 패널 -->
+      <div class="cal-dday-tab-panel" id="cal-dday-tab-dday" style="display:none;">
+        <div class="cal-goal-modal-body">
+          <?php if (empty($dday_list)) { ?>
+            <div class="cal-goal-empty-big">
+              <div class="cal-goal-empty-icon">◈</div>
+              <p>설정된 D-day 기념일이 없습니다.</p>
+              <span>일정 추가 시 'D-day' 타입을 선택하세요.</span>
+            </div>
+          <?php } else { ?>
+            <?php foreach ($dday_list as $dl) {
+              $dc = $dl['wr_3'] ? $dl['wr_3'] : '#007aff';
+              $bg_rgba = cal_hex_to_rgba($dc, 0.08);
+              $is_dday_today = ($dl['_dday_diff'] === 0);
+              $is_past = ($dl['_dday_diff'] < 0);
+            ?>
+            <div class="cal-goal-card cal-goal-card-dday-type<?php if ($is_dday_today) echo ' cal-goal-card-today'; ?>" style="border-left-color:<?php echo htmlspecialchars($dc); ?>; background:<?php echo $bg_rgba; ?>;">
+              <div class="cal-goal-card-info">
+                <div class="cal-goal-card-title"><?php echo htmlspecialchars($dl['wr_subject'], ENT_QUOTES, 'UTF-8'); ?></div>
+                <div class="cal-goal-card-date">📆 <?php echo $dl['wr_1']; ?></div>
+              </div>
+              <div class="cal-goal-card-dday cal-dday-badge<?php if ($is_dday_today) echo ' dday-today'; if ($is_past) echo ' dday-past'; ?>"><?php echo $dl['_dday_text']; ?></div>
+            </div>
+            <?php } ?>
+          <?php } ?>
+        </div>
       </div>
     </div>
   </div>

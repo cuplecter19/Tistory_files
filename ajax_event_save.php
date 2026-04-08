@@ -34,10 +34,14 @@ $wr_7       = isset($_POST['wr_7']) ? preg_replace('/[^0-9:]/','',$_POST['wr_7']
 $wr_8       = 'Asia/Seoul';
 
 $cal_goal     = isset($_POST['cal_goal']) && $_POST['cal_goal']=='1';
+$cal_dday     = isset($_POST['cal_dday']) && $_POST['cal_dday']=='1';
+$cal_widget   = isset($_POST['cal_widget']) && $_POST['cal_widget']=='1';
 $cal_repeat   = isset($_POST['cal_repeat']) && $_POST['cal_repeat']=='1';
 $repeat_type  = isset($_POST['cal_repeat_type']) ? $_POST['cal_repeat_type'] : 'weekly';
 $repeat_count = isset($_POST['cal_repeat_count']) ? intval($_POST['cal_repeat_count']) : 0;
 if (!in_array($repeat_type, array('daily','weekly','monthly'))) $repeat_type='weekly';
+// Goal과 D-day는 동시 선택 불가
+if ($cal_goal && $cal_dday) $cal_dday = false;
 
 if ($wr_subject === '') {
     echo json_encode(array('success'=>false,'error'=>'subject required')); exit;
@@ -55,10 +59,12 @@ function cal_add_date($date, $type, $i) {
     return date('Y-m-d', strtotime($date.' +'.$i.' months'));
 }
 
-/* wr_9 조합: GOAL 플래그 + REPEAT 정보 */
-function build_wr9($is_goal, $is_repeat = false, $repeat_type = '', $repeat_count = 0) {
+/* wr_9 조합: GOAL/DDAY/WIDGET 플래그 + REPEAT 정보 */
+function build_wr9($is_goal, $is_dday = false, $is_widget = false, $is_repeat = false, $repeat_type = '', $repeat_count = 0) {
     $parts = array();
     if ($is_goal) $parts[] = 'GOAL=1';
+    if ($is_dday) $parts[] = 'DDAY=1';
+    if ($is_widget) $parts[] = 'WIDGET=1';
     if ($is_repeat && $repeat_count > 0) {
         $parts[] = 'FREQ='.strtoupper($repeat_type).';COUNT='.intval($repeat_count);
     }
@@ -73,7 +79,7 @@ if ($w === 'u' && $wr_id > 0) {
     }
 
     // 기존 wr_9에서 GOAL 이외의 정보 유지 가능, 여기서는 새로 구성
-    $new_wr9 = build_wr9($cal_goal, $cal_repeat, $repeat_type, $repeat_count);
+    $new_wr9 = build_wr9($cal_goal, $cal_dday, $cal_widget, $cal_repeat, $repeat_type, $repeat_count);
 
     sql_query("UPDATE {$write_table}
                SET wr_subject='".sql_real_escape_string($wr_subject)."',
@@ -97,7 +103,7 @@ if ($w === 'u' && $wr_id > 0) {
         for ($i=1; $i<=$repeat_count; $i++) {
             $ns = cal_add_date($wr_1, $repeat_type, $i);
             $ne = $diff_days>0 ? date('Y-m-d', strtotime($ns.' +'.$diff_days.' days')) : $ns;
-            $repeat_wr9 = build_wr9($cal_goal, true, $repeat_type, $repeat_count);
+            $repeat_wr9 = build_wr9($cal_goal, $cal_dday, $cal_widget, true, $repeat_type, $repeat_count);
 
             sql_query("INSERT INTO {$write_table}
                 SET wr_num=(SELECT IFNULL(MIN(t.wr_num),0)-1 FROM {$write_table} t),
@@ -138,7 +144,7 @@ if ($w === 'u' && $wr_id > 0) {
 }
 
 /* ── 신규 등록 ── */
-$new_wr9 = build_wr9($cal_goal, $cal_repeat, $repeat_type, $repeat_count);
+$new_wr9 = build_wr9($cal_goal, $cal_dday, $cal_widget, $cal_repeat, $repeat_type, $repeat_count);
 
 sql_query("INSERT INTO {$write_table}
     SET wr_num=(SELECT IFNULL(MIN(t.wr_num),0)-1 FROM {$write_table} t),
@@ -175,7 +181,7 @@ if ($cal_repeat && $repeat_count > 0 && $repeat_count <= 365) {
     for ($i=1; $i<=$repeat_count; $i++) {
         $ns = cal_add_date($wr_1, $repeat_type, $i);
         $ne = $diff_days>0 ? date('Y-m-d', strtotime($ns.' +'.$diff_days.' days')) : $ns;
-        $repeat_wr9 = build_wr9($cal_goal, true, $repeat_type, $repeat_count);
+        $repeat_wr9 = build_wr9($cal_goal, $cal_dday, $cal_widget, true, $repeat_type, $repeat_count);
         sql_query("INSERT INTO {$write_table}
             SET wr_num=(SELECT IFNULL(MIN(t.wr_num),0)-1 FROM {$write_table} t),
                 wr_reply='', wr_comment=0, wr_comment_reply='',
