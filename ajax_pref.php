@@ -126,7 +126,7 @@ function cal_normalize_local_header_src($src, $upload_data_dir) {
     if ($filename === false) return '';
     $url = rtrim(G5_DATA_URL, '/').'/'.trim($upload_data_dir, '/').'/'.$filename;
     // HTTPS가 활성화된 경우 URL도 HTTPS로 통일 (mixed content 방지)
-    if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+    if (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off') {
         $url = str_replace('http://', 'https://', $url);
     }
     return $url;

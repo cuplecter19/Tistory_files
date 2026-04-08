@@ -98,7 +98,7 @@ if (!move_uploaded_file($file['tmp_name'], $save_path)) {
 
 $file_url = rtrim(G5_DATA_URL, '/').'/'.$HEADER_UPLOAD_DATA_DIR.'/'.$filename;
 // HTTPS가 활성화된 경우 URL도 HTTPS로 통일 (mixed content 방지)
-if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+if (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off') {
     $file_url = str_replace('http://', 'https://', $file_url);
 }
 echo json_encode(array(
