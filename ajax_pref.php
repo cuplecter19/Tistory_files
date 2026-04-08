@@ -124,7 +124,12 @@ function cal_is_local_header_src($src, $upload_data_dir) {
 function cal_normalize_local_header_src($src, $upload_data_dir) {
     $filename = cal_extract_local_header_filename($src, $upload_data_dir);
     if ($filename === false) return '';
-    return rtrim(G5_DATA_URL, '/').'/'.trim($upload_data_dir, '/').'/'.$filename;
+    $url = rtrim(G5_DATA_URL, '/').'/'.trim($upload_data_dir, '/').'/'.$filename;
+    // HTTPS가 활성화된 경우 URL도 HTTPS로 통일 (mixed content 방지)
+    if (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off') {
+        $url = str_replace('http://', 'https://', $url);
+    }
+    return $url;
 }
 
 function cal_remove_local_header_file($src, $upload_data_dir) {
@@ -384,6 +389,16 @@ function cal_parse_header_image_payload($input) {
     $parsed = json_decode($raw, true);
     if (is_array($parsed)) {
         return array('ok' => true, 'data' => $parsed);
+    }
+
+    // 그누보드 addslashes 대응: common.php에서 POST 데이터에 addslashes가 적용된 경우
+    // JSON 문자열의 큰따옴표(\")가 이스케이프되어 json_decode가 실패할 수 있음
+    $stripped = stripslashes($raw);
+    if ($stripped !== $raw) {
+        $parsed_stripped = json_decode($stripped, true);
+        if (is_array($parsed_stripped)) {
+            return array('ok' => true, 'data' => $parsed_stripped);
+        }
     }
 
     // 레거시/이중 인코딩 대응
