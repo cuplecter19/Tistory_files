@@ -49,8 +49,12 @@ function cal_remove_local_header_file($src, $upload_rel_dir) {
 
     $target = rtrim(G5_PATH, '/').$relative;
     $base_dir = rtrim(G5_PATH, '/').$upload_rel_dir;
-    if (!cal_starts_with($target, $base_dir)) return;
-    if (strpos($target, '..') !== false) return;
+    $base_real = realpath($base_dir);
+    if ($base_real === false) return;
+    $target_dir_real = realpath(dirname($target));
+    if ($target_dir_real === false) return;
+    $target_real = $target_dir_real.'/'.basename($target);
+    if (!cal_starts_with($target_real, rtrim($base_real, '/').'/')) return;
     if (is_file($target)) @unlink($target);
 }
 
@@ -125,7 +129,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (is_array($parsed) && isset($parsed['src'])) {
                 $src = $parsed['src'];
                 // Validate src: must be URL/data URI/or local uploaded file URL
-                $is_valid_url = filter_var($src, FILTER_VALIDATE_URL) !== false;
+                $is_valid_url = false;
+                if (filter_var($src, FILTER_VALIDATE_URL) !== false) {
+                    $parts = parse_url($src);
+                    if (is_array($parts) && isset($parts['scheme']) && in_array(strtolower($parts['scheme']), array('http', 'https'))) {
+                        $is_valid_url = true;
+                    }
+                }
                 $is_data_uri  = preg_match('/^data:image\//i', $src);
                 $is_local_file = cal_is_local_header_src($src, $HEADER_UPLOAD_REL_DIR);
                 if ($is_valid_url || $is_data_uri || $is_local_file) {

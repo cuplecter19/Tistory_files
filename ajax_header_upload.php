@@ -75,7 +75,18 @@ if (!is_dir($upload_dir) || !is_writable($upload_dir)) {
 }
 
 $ext = $allowed[$mime];
-$filename = 'header_'.date('YmdHis').'_'.mt_rand(1000, 9999).'.'.$ext;
+$rand = '';
+if (function_exists('openssl_random_pseudo_bytes')) {
+    $rand_bytes = openssl_random_pseudo_bytes(8);
+    if ($rand_bytes !== false) {
+        $rand = bin2hex($rand_bytes);
+    }
+}
+if ($rand === '') {
+    $rand = substr(sha1(uniqid(mt_rand(), true)), 0, 16);
+}
+
+$filename = 'header_'.date('YmdHis').'_'.$rand.'.'.$ext;
 $save_path = $upload_dir.'/'.$filename;
 
 if (!move_uploaded_file($file['tmp_name'], $save_path)) {
