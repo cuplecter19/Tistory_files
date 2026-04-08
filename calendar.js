@@ -189,7 +189,7 @@ var CalendarBoard = (function() {
 
     function renderCursor(){
       rafPending = false;
-      el.style.transform = 'translate3d(' + Math.round(x + cfg.hotspotX) + 'px,' + Math.round(y + cfg.hotspotY) + 'px,0)';
+      el.style.transform = 'translate3d(' + Math.round(x - cfg.hotspotX) + 'px,' + Math.round(y - cfg.hotspotY) + 'px,0)';
     }
 
     function queueRender(){
