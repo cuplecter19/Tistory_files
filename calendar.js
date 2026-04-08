@@ -12,14 +12,68 @@ var CalendarBoard = (function() {
   var VALID_THEMES = ['sakura', 'ocean', 'melon', 'kuromi', 'mocha', 'lemon'];
 
   var pendingFileData = null;
+  var _serverPrefsLoaded = false;
+
+  /* ══════════════════════════
+     서버 환경설정 동기화
+     ══════════════════════════ */
+  function loadServerPrefs(callback){
+    if (!config.pref_url) { callback(); return; }
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', config.pref_url + '?_t=' + Date.now(), true);
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState === 4) {
+        if (xhr.status === 200) {
+          try {
+            var resp = JSON.parse(xhr.responseText);
+            if (resp.success) {
+              _serverPrefsLoaded = true;
+              if (resp.theme && VALID_THEMES.indexOf(resp.theme) > -1) {
+                try { localStorage.setItem(THEME_STORAGE_KEY, resp.theme); } catch(e){}
+              }
+              if (resp.header_image && resp.header_image.src) {
+                try { localStorage.setItem(HIMG_STORAGE_KEY, JSON.stringify(resp.header_image)); } catch(e){}
+              } else if (resp.header_image === null) {
+                try { localStorage.removeItem(HIMG_STORAGE_KEY); } catch(e){}
+              }
+            }
+          } catch(e){}
+        }
+        callback();
+      }
+    };
+    xhr.send();
+  }
+
+  function saveThemeToServer(name){
+    if (!config.pref_url) return;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', config.pref_url, true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.send('theme=' + encodeURIComponent(name));
+  }
+
+  function saveHeaderImageToServer(data){
+    if (!config.pref_url) return;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', config.pref_url, true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    var val = data ? JSON.stringify(data) : 'null';
+    xhr.send('header_image=' + encodeURIComponent(val));
+  }
 
   function q(id){ return document.getElementById(id); }
 
   function init(opts){
     config = opts || config || {};
     loadRecentColors();
-    applyStoredTheme();
-    applyStoredHeaderImage();
+    loadServerPrefs(function(){
+      applyStoredTheme();
+      applyStoredHeaderImage();
+    });
     bindGlobalClickDelegation();
     bindDayClicks();
     bindMonthNav();
@@ -37,10 +91,10 @@ var CalendarBoard = (function() {
     var stored = 'sakura';
     try { stored = localStorage.getItem(THEME_STORAGE_KEY) || 'sakura'; } catch(e){}
     if (VALID_THEMES.indexOf(stored) === -1) stored = 'sakura';
-    setTheme(stored);
+    setTheme(stored, true);
   }
 
-  function setTheme(name){
+  function setTheme(name, skipServer){
     var board = document.getElementById('calendar-board');
     if (!board) return;
     for (var i = 0; i < VALID_THEMES.length; i++) board.classList.remove('theme-' + VALID_THEMES[i]);
@@ -50,6 +104,7 @@ var CalendarBoard = (function() {
       dots[j].classList.toggle('active', dots[j].getAttribute('data-theme') === name);
     }
     try { localStorage.setItem(THEME_STORAGE_KEY, name); } catch(e){}
+    if (!skipServer) saveThemeToServer(name);
   }
 
   /* ══════════════════════════
@@ -62,11 +117,12 @@ var CalendarBoard = (function() {
     } catch(e){ return null; }
   }
 
-  function saveHeaderImageData(data){
+  function saveHeaderImageData(data, skipServer){
     try {
       if (data) localStorage.setItem(HIMG_STORAGE_KEY, JSON.stringify(data));
       else localStorage.removeItem(HIMG_STORAGE_KEY);
     } catch(e){}
+    if (!skipServer) saveHeaderImageToServer(data);
   }
 
   function applyStoredHeaderImage(){

@@ -34,4 +34,14 @@ function gcal_ensure_tables() {
         UNIQUE KEY uniq_wr (bo_table, wr_id),
         UNIQUE KEY uniq_google (bo_table, google_event_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8", false);
+
+    $pref_table = $g5['prefix'].'calendar_user_pref';
+
+    sql_query("CREATE TABLE IF NOT EXISTS {$pref_table} (
+        mb_id varchar(50) NOT NULL,
+        theme varchar(20) NOT NULL DEFAULT 'sakura',
+        header_image longtext,
+        updated_at datetime NOT NULL,
+        PRIMARY KEY (mb_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8", false);
 }
