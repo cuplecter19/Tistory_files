@@ -87,6 +87,8 @@ function cal_extract_local_header_filename($src, $upload_data_dir) {
     if ($path === '') return false;
     $path = str_replace('\\', '/', $path);
     $path = rawurldecode($path);
+    if (strpos($path, "\0") !== false) return false;
+    if (preg_match('#/(?:\.{1,2})(?:/|$)#', $path)) return false;
     if (substr($path, 0, 1) !== '/') $path = '/'.$path;
     $path = preg_replace('#/+#', '/', $path);
 
