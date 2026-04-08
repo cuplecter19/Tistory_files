@@ -10,7 +10,7 @@ var CalendarBoard = (function() {
 
   var VALID_THEMES = ['sakura', 'ocean', 'melon', 'kuromi', 'mocha', 'lemon'];
 
-  var pendingFileData = null;
+  var pendingFile = null;
   var _serverPrefsLoaded = false;
 
   /* ══════════════════════════
@@ -58,6 +58,33 @@ var CalendarBoard = (function() {
     xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
     var val = data ? JSON.stringify(data) : 'null';
     xhr.send('header_image=' + encodeURIComponent(val));
+  }
+
+  function uploadHeaderImageFile(file, callback){
+    if (!config.header_upload_url) { alert('업로드 URL이 설정되지 않았습니다.'); callback(null); return; }
+    var form = new FormData();
+    form.append('header_file', file);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', config.header_upload_url, true);
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState !== 4) return;
+      if (xhr.status !== 200) { alert('이미지 업로드에 실패했습니다.'); callback(null); return; }
+      try {
+        var resp = JSON.parse(xhr.responseText);
+        if (resp && resp.success && resp.src) { callback(resp.src); return; }
+        alert((resp && resp.error) ? resp.error : '이미지 업로드에 실패했습니다.');
+      } catch(e){
+        alert('이미지 업로드 응답을 처리하지 못했습니다.');
+      }
+      callback(null);
+    };
+    xhr.onerror = function(){
+      alert('이미지 업로드 중 오류가 발생했습니다.');
+      callback(null);
+    };
+    xhr.send(form);
   }
 
   function q(id){ return document.getElementById(id); }
@@ -198,11 +225,11 @@ var CalendarBoard = (function() {
   function handleFileSelect(file){
     if (!file || !file.type.match(/^image\//)) { alert('이미지 파일만 선택 가능합니다.'); return; }
     if (file.size > 5 * 1024 * 1024) { alert('5MB 이하의 이미지만 사용할 수 있습니다.'); return; }
+    pendingFile = file;
     var reader = new FileReader();
     reader.onload = function(e){
-      pendingFileData = e.target.result;
       var preview = q('cal-img-file-preview');
-      if (preview) preview.innerHTML = '<img src="' + pendingFileData + '" style="max-width:100%;max-height:180px;border-radius:8px;">';
+      if (preview) preview.innerHTML = '<img src="' + e.target.result + '" style="max-width:100%;max-height:180px;border-radius:8px;">';
     };
     reader.readAsDataURL(file);
   }
@@ -455,7 +482,7 @@ var CalendarBoard = (function() {
      ══════════════════════════ */
   function openImageModal(){
     var m = q('cal-img-modal'); if (!m) return;
-    pendingFileData = null;
+    pendingFile = null;
     var data = getHeaderImageData();
     var urlInput = q('cal-img-url-input');
     var heightInput = q('cal-img-height-input');
@@ -481,7 +508,7 @@ var CalendarBoard = (function() {
     var m = q('cal-img-modal');
     if (m) m.style.display = 'none';
     document.body.classList.remove('modal-open');
-    pendingFileData = null;
+    pendingFile = null;
   }
 
   function handleImageSave(){
@@ -497,9 +524,14 @@ var CalendarBoard = (function() {
 
     var src = '';
     var type = '';
-    if (tabName === 'file' && pendingFileData) {
-      src = pendingFileData;
-      type = 'file';
+    if (tabName === 'file') {
+      if (!pendingFile) { alert('업로드할 파일을 먼저 선택해 주세요.'); return; }
+      uploadHeaderImageFile(pendingFile, function(uploadedSrc){
+        if (!uploadedSrc) return;
+        saveHeaderImageData({ src: uploadedSrc, type: 'file', height: height, fit: fit });
+        closeImageModal();
+      });
+      return;
     } else {
       var urlInput = q('cal-img-url-input');
       src = urlInput ? urlInput.value.trim() : '';
