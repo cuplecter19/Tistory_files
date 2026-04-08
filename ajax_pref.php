@@ -188,33 +188,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(array('success'=>false,'error'=>'invalid header_image data')); exit;
         }
         $parsed = $payload['data'];
-        if (is_array($parsed)) {
-            if (isset($parsed['src'])) {
-                $src = $parsed['src'];
-                // Validate src: must be URL/data URI/or local uploaded file URL
-                $is_valid_url = false;
-                if (filter_var($src, FILTER_VALIDATE_URL) !== false) {
-                    $parts = parse_url($src);
-                    if (is_array($parts) && isset($parts['scheme']) && in_array(strtolower($parts['scheme']), array('http', 'https'))) {
-                        $is_valid_url = true;
-                    }
+        if (is_array($parsed) && isset($parsed['src'])) {
+            $src = $parsed['src'];
+            // Validate src: must be URL/data URI/or local uploaded file URL
+            $is_valid_url = false;
+            if (filter_var($src, FILTER_VALIDATE_URL) !== false) {
+                $parts = parse_url($src);
+                if (is_array($parts) && isset($parts['scheme']) && in_array(strtolower($parts['scheme']), array('http', 'https'))) {
+                    $is_valid_url = true;
                 }
-                $is_data_uri  = preg_match('/^data:image\//i', $src);
-                $is_local_file = cal_is_local_header_src($src, $HEADER_UPLOAD_REL_DIR);
-                if ($is_valid_url || $is_data_uri || $is_local_file) {
-                    $safe = array(
-                        'src' => $src,
-                        'type' => isset($parsed['type']) && in_array($parsed['type'], array('url','file')) ? $parsed['type'] : 'url',
-                        'height' => isset($parsed['height']) ? max(60, min(400, intval($parsed['height']))) : 160,
-                        'fit' => isset($parsed['fit']) && in_array($parsed['fit'], array('cover','contain','fill')) ? $parsed['fit'] : 'cover'
-                    );
-                    $header_image_json = json_encode($safe);
-                } else {
-                    echo json_encode(array('success'=>false,'error'=>'invalid image src')); exit;
-                }
-            } else {
-                echo json_encode(array('success'=>false,'error'=>'invalid header_image data')); exit;
             }
+            $is_data_uri  = preg_match('/^data:image\//i', $src);
+            $is_local_file = cal_is_local_header_src($src, $HEADER_UPLOAD_REL_DIR);
+            if ($is_valid_url || $is_data_uri || $is_local_file) {
+                $safe = array(
+                    'src' => $src,
+                    'type' => isset($parsed['type']) && in_array($parsed['type'], array('url','file')) ? $parsed['type'] : 'url',
+                    'height' => isset($parsed['height']) ? max(60, min(400, intval($parsed['height']))) : 160,
+                    'fit' => isset($parsed['fit']) && in_array($parsed['fit'], array('cover','contain','fill')) ? $parsed['fit'] : 'cover'
+                );
+                $header_image_json = json_encode($safe);
+            } else {
+                echo json_encode(array('success'=>false,'error'=>'invalid image src')); exit;
+            }
+        } elseif (is_array($parsed)) {
+            echo json_encode(array('success'=>false,'error'=>'invalid header_image data')); exit;
         }
 
         // 전역 설정 UPSERT (__global__ 레코드)
