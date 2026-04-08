@@ -213,6 +213,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } elseif (is_array($parsed)) {
             echo json_encode(array('success'=>false,'error'=>'invalid header_image data')); exit;
+        } elseif ($parsed !== null) {
+            echo json_encode(array('success'=>false,'error'=>'invalid header_image data')); exit;
         }
 
         // 전역 설정 UPSERT (__global__ 레코드)
