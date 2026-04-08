@@ -668,15 +668,9 @@ var CalendarBoard = (function() {
   function closeWriteModal(){ var m = q('cal-modal'); if(m) m.style.display = 'none'; document.body.classList.remove('modal-open'); }
 
   function updateWidgetRowVisibility(){
-    var radioNone = q('modal_dday_type_none');
     var widgetRow = q('modal_widget_row');
     if (!widgetRow) return;
-    var isNone = radioNone ? radioNone.checked : true;
-    widgetRow.style.display = isNone ? 'none' : '';
-    if (isNone) {
-      var widgetChk = q('modal_cal_widget');
-      if (widgetChk) widgetChk.checked = false;
-    }
+    widgetRow.style.display = '';
   }
 
   function bindDdayTypeRadios(){

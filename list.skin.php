@@ -340,7 +340,7 @@ ob_start();
           <label class="cal-radio-label"><input type="radio" name="cal_dday_type" id="modal_dday_type_dday" value="dday"> ◈ D-day</label>
         </div>
         <!-- 위젯 표시 여부 -->
-        <div class="cal-form-row cal-widget-row" id="modal_widget_row" style="display:none;">
+        <div class="cal-form-row cal-widget-row" id="modal_widget_row">
           <label class="cal-goal-check"><input type="checkbox" name="cal_widget" id="modal_cal_widget" value="1"> <span class="cal-goal-check-label">📌 위젯에 표시</span></label>
         </div>
         <div class="cal-form-row cal-repeat-row">
