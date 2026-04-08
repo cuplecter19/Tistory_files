@@ -7,6 +7,7 @@ var CalendarBoard = (function() {
   var MAX_RECENT_COLORS = 12;
   var formsBound = false;
   var currentSelectedDay = null;
+  var cursorRuntime = null;
 
   var VALID_THEMES = ['sakura', 'ocean', 'melon', 'kuromi', 'mocha', 'lemon'];
 
@@ -103,7 +104,138 @@ var CalendarBoard = (function() {
     bindGoogleRefresh();
     bindImageModal();
     bindDdayTypeRadios();
+    initAnimatedCursor();
     if (!formsBound) { formsBound = true; }
+  }
+
+  /* ══════════════════════════
+     애니메이션 커서 (.ani 대체)
+     ══════════════════════════ */
+  function normalizeCursorConfig(raw){
+    if (!raw || raw.enabled === false) return null;
+    var frames = raw.frameUrls || raw.frame_urls || [];
+    if (!Array.isArray(frames)) frames = [];
+    var cleanFrames = [];
+    for (var i = 0; i < frames.length; i++) {
+      if (typeof frames[i] === 'string' && frames[i].trim()) cleanFrames.push(frames[i].trim());
+    }
+    if (!cleanFrames.length) return null;
+
+    var fps = parseInt(raw.fps, 10);
+    if (!fps || fps < 1) fps = 12;
+    if (fps > 60) fps = 60;
+
+    var size = parseInt(raw.size, 10);
+    if (!size || size < 8) size = 32;
+    if (size > 128) size = 128;
+
+    var hotspotX = parseInt(raw.hotspotX != null ? raw.hotspotX : raw.hotspot_x, 10);
+    var hotspotY = parseInt(raw.hotspotY != null ? raw.hotspotY : raw.hotspot_y, 10);
+    if (isNaN(hotspotX)) hotspotX = 0;
+    if (isNaN(hotspotY)) hotspotY = 0;
+
+    return {
+      frameUrls: cleanFrames,
+      fps: fps,
+      size: size,
+      hotspotX: hotspotX,
+      hotspotY: hotspotY,
+      disableSelectors: (typeof raw.disableSelectors === 'string' && raw.disableSelectors) ? raw.disableSelectors : (raw.disable_selectors || '')
+    };
+  }
+
+  function teardownAnimatedCursor(){
+    if (!cursorRuntime) return;
+    document.removeEventListener('pointermove', cursorRuntime.onMove, true);
+    document.removeEventListener('pointerleave', cursorRuntime.onHide, true);
+    window.removeEventListener('blur', cursorRuntime.onHide, true);
+    if (cursorRuntime.appEl) cursorRuntime.appEl.removeEventListener('mouseleave', cursorRuntime.onHide, true);
+    if (cursorRuntime.timer) clearInterval(cursorRuntime.timer);
+    if (cursorRuntime.el && cursorRuntime.el.parentNode) cursorRuntime.el.parentNode.removeChild(cursorRuntime.el);
+    document.body.classList.remove('cal-ani-cursor-on');
+    cursorRuntime = null;
+  }
+
+  function initAnimatedCursor(){
+    teardownAnimatedCursor();
+    var cfg = normalizeCursorConfig(config.cursor_animation);
+    if (!cfg) return;
+    if (window.matchMedia && !window.matchMedia('(pointer:fine)').matches) return;
+
+    var app = q('calendar-app');
+    if (!app || !document.body) return;
+
+    for (var i = 0; i < cfg.frameUrls.length; i++) {
+      var preload = new Image();
+      preload.src = cfg.frameUrls[i];
+    }
+
+    var el = document.createElement('div');
+    el.className = 'cal-ani-cursor is-hidden';
+    el.style.width = cfg.size + 'px';
+    el.style.height = cfg.size + 'px';
+
+    var img = document.createElement('img');
+    img.alt = '';
+    img.draggable = false;
+    img.src = cfg.frameUrls[0];
+    el.appendChild(img);
+    document.body.appendChild(el);
+
+    var frameIndex = 0;
+    var visible = false;
+    var x = 0, y = 0;
+    var rafPending = false;
+
+    function renderCursor(){
+      rafPending = false;
+      el.style.transform = 'translate3d(' + Math.round(x + cfg.hotspotX) + 'px,' + Math.round(y + cfg.hotspotY) + 'px,0)';
+    }
+
+    function queueRender(){
+      if (rafPending) return;
+      rafPending = true;
+      requestAnimationFrame(renderCursor);
+    }
+
+    function shouldDisableAtTarget(target){
+      if (!target || !app.contains(target)) return true;
+      if (!cfg.disableSelectors) return false;
+      return !!closest(target, cfg.disableSelectors);
+    }
+
+    function onHide(){
+      visible = false;
+      el.classList.add('is-hidden');
+      document.body.classList.remove('cal-ani-cursor-on');
+    }
+
+    function onMove(e){
+      if (e.pointerType && e.pointerType !== 'mouse') return;
+      if (shouldDisableAtTarget(e.target)) { onHide(); return; }
+      x = e.clientX;
+      y = e.clientY;
+      queueRender();
+      if (!visible) {
+        visible = true;
+        el.classList.remove('is-hidden');
+      }
+      document.body.classList.add('cal-ani-cursor-on');
+    }
+
+    var frameInterval = Math.max(16, Math.round(1000 / cfg.fps));
+    var timer = setInterval(function(){
+      if (!visible || cfg.frameUrls.length < 2) return;
+      frameIndex = (frameIndex + 1) % cfg.frameUrls.length;
+      img.src = cfg.frameUrls[frameIndex];
+    }, frameInterval);
+
+    document.addEventListener('pointermove', onMove, true);
+    document.addEventListener('pointerleave', onHide, true);
+    window.addEventListener('blur', onHide, true);
+    app.addEventListener('mouseleave', onHide, true);
+
+    cursorRuntime = { el: el, appEl: app, timer: timer, onMove: onMove, onHide: onHide };
   }
 
   /* ══════════════════════════

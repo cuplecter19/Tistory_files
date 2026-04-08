@@ -119,6 +119,16 @@ $google_auth_url=$_skin_url.'/google_oauth_start.php?bo_table='.$bo_table;
 
 $weekday_labels = array('일','월','화','수','목','금','토');
 
+// 애니메이션 커서 프레임 자동 로드 (cursor_frames 디렉터리)
+$cursor_frame_urls = array();
+$cursor_frame_files = glob(__DIR__.'/cursor_frames/*.{png,webp,gif,jpg,jpeg,svg}', GLOB_BRACE);
+if (is_array($cursor_frame_files) && !empty($cursor_frame_files)) {
+    natsort($cursor_frame_files);
+    foreach ($cursor_frame_files as $_frame_file) {
+        $cursor_frame_urls[] = $_skin_url.'/cursor_frames/'.rawurlencode(basename($_frame_file));
+    }
+}
+
 ob_start();
 ?>
 <div id="calendar-board" class="cal-wrap">
@@ -512,6 +522,15 @@ CalendarBoard.init({
   copy_action_url: '<?php echo $_skin_url; ?>/copy_event.php',
   delete_action_url: '<?php echo $_skin_url; ?>/delete_event.php',
   pref_url: '<?php echo $_skin_url; ?>/ajax_pref.php',
-  header_upload_url: '<?php echo $_skin_url; ?>/ajax_header_upload.php'
+  header_upload_url: '<?php echo $_skin_url; ?>/ajax_header_upload.php',
+  cursor_animation: {
+    enabled: <?php echo !empty($cursor_frame_urls) ? 'true' : 'false'; ?>,
+    frame_urls: <?php echo json_encode(array_values($cursor_frame_urls), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>,
+    fps: 12,
+    size: 36,
+    hotspot_x: 2,
+    hotspot_y: 2,
+    disable_selectors: 'input, textarea, select, option, [contenteditable=true], .cal-input, .cal-textarea, .ui-resizable-handle'
+  }
 });
 </script>

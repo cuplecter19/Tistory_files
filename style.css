@@ -1106,3 +1106,39 @@ body.modal-open { overflow:hidden !important; }
 .cw-float-dday-future {
   color: #007aff;
 }
+
+/* ── 프레임 기반 애니메이션 커서 (.ani 대체) ── */
+.cal-ani-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+  opacity: 1;
+  transform: translate3d(-9999px, -9999px, 0);
+  will-change: transform;
+}
+.cal-ani-cursor.is-hidden {
+  opacity: 0;
+}
+.cal-ani-cursor img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+body.cal-ani-cursor-on #calendar-app,
+body.cal-ani-cursor-on #calendar-app * {
+  cursor: none !important;
+}
+body.cal-ani-cursor-on #calendar-app input,
+body.cal-ani-cursor-on #calendar-app textarea,
+body.cal-ani-cursor-on #calendar-app select,
+body.cal-ani-cursor-on #calendar-app option,
+body.cal-ani-cursor-on #calendar-app [contenteditable="true"],
+body.cal-ani-cursor-on #calendar-app .cal-input,
+body.cal-ani-cursor-on #calendar-app .cal-textarea,
+body.cal-ani-cursor-on #calendar-app .ui-resizable-handle {
+  cursor: auto !important;
+}
