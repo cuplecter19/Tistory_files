@@ -150,11 +150,19 @@ ob_start();
     <?php endif; ?>
     <?php
     $_himg_src    = $_global_header_image ? htmlspecialchars($_global_header_image['src'], ENT_QUOTES, 'UTF-8') : '';
-    $_himg_height = $_global_header_image ? intval(isset($_global_header_image['height']) ? $_global_header_image['height'] : 160) : 160;
+        $_himg_height = $_global_header_image ? intval(isset($_global_header_image['height']) ? $_global_header_image['height'] : 160) : 160;
     $_himg_fit    = $_global_header_image ? htmlspecialchars(isset($_global_header_image['fit']) ? $_global_header_image['fit'] : 'cover', ENT_QUOTES, 'UTF-8') : 'cover';
-    $_himg_style  = $_global_header_image
-        ? 'height:'.$_himg_height.'px;object-fit:'.$_himg_fit.';'
-        : 'display:none;';
+    $_himg_size_mode = $_global_header_image && isset($_global_header_image['size_mode']) ? $_global_header_image['size_mode'] : 'height';
+    $_himg_width  = $_global_header_image ? intval(isset($_global_header_image['width']) ? $_global_header_image['width'] : 520) : 520;
+    if ($_global_header_image) {
+        if ($_himg_size_mode === 'width') {
+            $_himg_style = 'width:'.$_himg_width.'px;height:auto;object-fit:'.$_himg_fit.';';
+        } else {
+            $_himg_style = 'height:'.$_himg_height.'px;object-fit:'.$_himg_fit.';';
+        }
+    } else {
+        $_himg_style = 'display:none;';
+    }
     ?>
     <img id="cal-header-img-el" class="cal-header-img" src="<?php echo $_himg_src; ?>" alt="" style="<?php echo $_himg_style; ?>">
     <?php if ($is_admin): ?>
@@ -181,17 +189,25 @@ ob_start();
         </div>
         <div class="cal-img-tab-panel" id="cal-img-tab-file" style="display:none;">
           <label class="cal-label">이미지 파일
-            <div class="cal-file-drop" id="cal-file-drop">
+          <div class="cal-file-drop" id="cal-file-drop">
               <span>파일을 드래그하거나 클릭하세요</span>
-              <input type="file" id="cal-img-file-input" accept="image/*" style="display:none;">
-            </div>
+          </div>
+          <input type="file" id="cal-img-file-input" accept="image/*" style="display:none;">
           </label>
           <div class="cal-img-preview-box" id="cal-img-file-preview"></div>
         </div>
-        <div class="cal-form-row" style="grid-template-columns:1fr auto;align-items:end;gap:8px;">
-          <label class="cal-label">높이 (px)
-            <input type="number" id="cal-img-height-input" class="cal-input" value="160" min="60" max="400" step="10">
+                <div class="cal-form-row" style="grid-template-columns:auto 1fr;align-items:end;gap:8px;">
+          <label class="cal-label">기준
+            <select id="cal-img-size-mode" class="cal-input">
+              <option value="height">세로 (px)</option>
+              <option value="width">가로 (px)</option>
+            </select>
           </label>
+          <label class="cal-label" id="cal-img-size-label">크기 (px)
+            <input type="number" id="cal-img-size-input" class="cal-input" value="160" min="60" step="10">
+          </label>
+        </div>
+        <div class="cal-form-row" style="grid-template-columns:1fr;align-items:end;gap:8px;">
           <label class="cal-label">맞춤
             <select id="cal-img-fit-select" class="cal-input">
               <option value="cover">채우기 (cover)</option>
