@@ -372,6 +372,77 @@ function cal_save_remote_image($src, $upload_data_dir, $max_bytes, $allowed_mime
     return cal_save_image_binary($binary, $upload_data_dir, $max_bytes, $allowed_mime_ext, $error);
 }
 
+function cal_is_same_site_url($src) {
+    if (!is_string($src) || $src === '') return false;
+    $parts = parse_url($src);
+    if (!is_array($parts) || empty($parts['host'])) return false;
+    $src_host = strtolower($parts['host']);
+
+    $site_host = parse_url(G5_URL, PHP_URL_HOST);
+    $data_host = parse_url(G5_DATA_URL, PHP_URL_HOST);
+    $site_host = is_string($site_host) ? strtolower($site_host) : '';
+    $data_host = is_string($data_host) ? strtolower($data_host) : '';
+
+    return ($src_host === $site_host || ($data_host && $src_host === $data_host));
+}
+
+function cal_copy_local_site_image($src, $upload_data_dir, $max_bytes, $allowed_mime_ext, &$error) {
+    $error = '';
+
+    // URL → 서버 로컬 파일 경로로 변환
+    $parts = parse_url($src);
+    $url_path = isset($parts['path']) ? $parts['path'] : '';
+    if ($url_path === '') {
+        $error = 'invalid image src';
+        return false;
+    }
+
+    // G5_URL의 경로 prefix 제거하여 DOCUMENT_ROOT 기준 경로 도출
+    $site_base_path = parse_url(G5_URL, PHP_URL_PATH);
+    $site_base_path = is_string($site_base_path) ? rtrim($site_base_path, '/') : '';
+
+    // 방법 1: G5_PATH 기준으로 파일 경로 구성
+    $relative_path = $url_path;
+    if ($site_base_path !== '' && strpos($url_path, $site_base_path) === 0) {
+        $relative_path = substr($url_path, strlen($site_base_path));
+    }
+    $relative_path = str_replace('\\', '/', $relative_path);
+    $relative_path = rawurldecode($relative_path);
+
+    // 경로 조작 방지
+    if (strpos($relative_path, '..') !== false || strpos($relative_path, "\0") !== false) {
+        $error = 'invalid image src';
+        return false;
+    }
+
+    $local_path = rtrim(G5_PATH, '/') . '/' . ltrim($relative_path, '/');
+
+    if (!is_file($local_path) || !is_readable($local_path)) {
+        // 방법 2: DOCUMENT_ROOT 기준
+        if (isset($_SERVER['DOCUMENT_ROOT']) && $_SERVER['DOCUMENT_ROOT']) {
+            $local_path = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . '/' . ltrim($url_path, '/');
+        }
+        if (!is_file($local_path) || !is_readable($local_path)) {
+            $error = 'image file not found on server';
+            return false;
+        }
+    }
+
+    $filesize = filesize($local_path);
+    if ($filesize === false || $filesize > $max_bytes) {
+        $error = cal_max_size_error($max_bytes);
+        return false;
+    }
+
+    $binary = @file_get_contents($local_path, false, null, 0, $max_bytes + 1);
+    if ($binary === false || $binary === '') {
+        $error = 'failed to read image file';
+        return false;
+    }
+
+    return cal_save_image_binary($binary, $upload_data_dir, $max_bytes, $allowed_mime_ext, $error);
+}
+
 function cal_parse_header_image_payload($input) {
     if (is_array($input)) {
         return array('ok' => true, 'data' => $input);
@@ -501,6 +572,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $final_src = cal_normalize_local_header_src($src, $HEADER_UPLOAD_DATA_DIR);
                 } elseif (preg_match('/^data:image\//i', $src)) {
                     $final_src = cal_save_data_uri_image($src, $HEADER_UPLOAD_DATA_DIR, $HEADER_MAX_BYTES, $HEADER_ALLOWED_MIME_EXT, $save_error);
+                } elseif (cal_is_same_site_url($src)) {
+                    $final_src = cal_copy_local_site_image($src, $HEADER_UPLOAD_DATA_DIR, $HEADER_MAX_BYTES, $HEADER_ALLOWED_MIME_EXT, $save_error);
                 } else {
                     $final_src = cal_save_remote_image($src, $HEADER_UPLOAD_DATA_DIR, $HEADER_MAX_BYTES, $HEADER_ALLOWED_MIME_EXT, $save_error);
                 }
@@ -509,10 +582,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     echo json_encode(array('success'=>false,'error'=>$save_error ? $save_error : 'invalid image src')); exit;
                 }
 
+                $size_mode = isset($parsed['size_mode']) && in_array($parsed['size_mode'], array('height','width')) ? $parsed['size_mode'] : 'height';
                 $safe = array(
                     'src' => $final_src,
                     'type' => 'file',
-                    'height' => isset($parsed['height']) ? max(60, min(400, intval($parsed['height']))) : 160,
+                    'size_mode' => $size_mode,
+                    'height' => isset($parsed['height']) ? max(60, intval($parsed['height'])) : 160,
+                    'width' => isset($parsed['width']) ? max(60, intval($parsed['width'])) : 520,
                     'fit' => isset($parsed['fit']) && in_array($parsed['fit'], array('cover','contain','fill')) ? $parsed['fit'] : 'cover'
                 );
                 $header_image_json = json_encode($safe);
