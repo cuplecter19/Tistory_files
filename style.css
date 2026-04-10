@@ -472,8 +472,15 @@
   display: block;
   width: 100%;
   height: 160px;
+  max-width: 100%;
   object-fit: cover;
-  transition: height .3s ease;
+  transition: height .3s ease, width .3s ease;
+}
+.cal-header-img.size-mode-width {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  margin: 0 auto;
 }
 .cal-header-img-remove {
   position: absolute;
@@ -1106,3 +1113,4 @@ body.modal-open { overflow:hidden !important; }
 .cw-float-dday-future {
   color: #007aff;
 }
+
