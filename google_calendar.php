@@ -51,13 +51,20 @@ function gcal_build_event_payload($row) {
 
     // 시간이 있으면 dateTime, 없으면 종일(date) 이벤트로 처리
     if ($stime !== '') {
+        if (!$etime) {
+            // 종료 시간이 없으면 시작 시간 + 1시간
+            $end_dt = new DateTime($edate.'T'.$stime.':00');
+            $end_dt->modify('+1 hour');
+            $etime = $end_dt->format('H:i');
+        }
         $payload['start'] = array('dateTime' => $sdate.'T'.$stime.':00', 'timeZone' => $tz);
-        $payload['end']   = array('dateTime' => $edate.'T'.($etime ? $etime : $stime).':00', 'timeZone' => $tz);
+        $payload['end']   = array('dateTime' => $edate.'T'.$etime.':00', 'timeZone' => $tz);
     } else {
         $payload['start'] = array('date' => $sdate);
         // 구글 종일 이벤트: end.date는 종료일 다음 날
-        $end_exclusive = date('Y-m-d', strtotime($edate.' +1 day'));
-        $payload['end']   = array('date' => $end_exclusive);
+        $end_dt = new DateTime($edate);
+        $end_dt->modify('+1 day');
+        $payload['end']   = array('date' => $end_dt->format('Y-m-d'));
     }
 
     return $payload;

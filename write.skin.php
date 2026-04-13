@@ -7,10 +7,6 @@ $event_color = isset($write['wr_3']) && $write['wr_3'] ? $write['wr_3'] : '#3B82
 $event_wr9   = isset($write['wr_9']) ? $write['wr_9'] : '';
 $event_wr4   = isset($write['wr_4']) ? $write['wr_4'] : '';
 $event_wr5   = isset($write['wr_5']) ? $write['wr_5'] : '';
-// 수정 모드에서 기존 구글 연동 이벤트라면 local_modified로 표시
-if ($w === 'u' && $event_wr4 !== '' && in_array($event_wr5, array('google', 'both'))) {
-    $event_wr5 = 'local_modified';
-}
 $_is_goal   = (strpos($event_wr9, 'GOAL=1') !== false);
 $_is_dday   = (strpos($event_wr9, 'DDAY=1') !== false);
 $_is_widget = (strpos($event_wr9, 'WIDGET=1') !== false);
@@ -66,6 +62,13 @@ function calBuildWr9(){
     parts.push('FREQ=' + rType + ';COUNT=' + parseInt(repeatCount.value, 10));
   }
   document.getElementById('fwrite_wr_9').value = parts.join(';');
+  // 수정 모드에서 구글 연동 이벤트라면 submit 시점에 local_modified로 표시
+  var wr4 = document.querySelector('input[name="wr_4"]');
+  var wr5 = document.querySelector('input[name="wr_5"]');
+  if (wr4 && wr5 && wr4.value !== '') {
+    var cur = wr5.value;
+    if (cur === 'google' || cur === 'both') { wr5.value = 'local_modified'; }
+  }
   return true;
 }
 </script>
