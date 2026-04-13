@@ -30,26 +30,55 @@ $days_in_month = intval(date('t', mktime(0,0,0,$cal_month,1,$cal_year)));
 $write_table = $g5['write_prefix'].$bo_table;
 $map_table = $g5['prefix'].'calendar_google_map';
 
+$push_new_count = 0;
+$push_update_count = 0;
+$push_error = '';
+
+/**
+ * 로컬 이벤트를 구글 캘린더 API용 payload로 변환하는 헬퍼 함수
+ */
+function gcal_build_event_payload($row) {
+    $sdate = $row['wr_1'] ? $row['wr_1'] : date('Y-m-d');
+    $edate = $row['wr_2'] ? $row['wr_2'] : $sdate;
+    $stime = $row['wr_6'] ? $row['wr_6'] : '';
+    $etime = $row['wr_7'] ? $row['wr_7'] : '';
+    $tz    = $row['wr_8'] ? $row['wr_8'] : 'Asia/Seoul';
+
+    $payload = array(
+        'summary'     => $row['wr_subject'] ? $row['wr_subject'] : '(제목없음)',
+        'description' => $row['wr_content'] ? $row['wr_content'] : ''
+    );
+
+    // 시간이 있으면 dateTime, 없으면 종일(date) 이벤트로 처리
+    if ($stime !== '') {
+        if (!$etime) {
+            // 종료 시간이 없으면 시작 시간 + 1시간
+            $end_dt = new DateTime($edate.'T'.$stime.':00');
+            $end_dt->modify('+1 hour');
+            $etime = $end_dt->format('H:i');
+        }
+        $payload['start'] = array('dateTime' => $sdate.'T'.$stime.':00', 'timeZone' => $tz);
+        $payload['end']   = array('dateTime' => $edate.'T'.$etime.':00', 'timeZone' => $tz);
+    } else {
+        $payload['start'] = array('date' => $sdate);
+        // 구글 종일 이벤트: end.date는 종료일 다음 날
+        $end_dt = new DateTime($edate);
+        $end_dt->modify('+1 day');
+        $payload['end']   = array('date' => $end_dt->format('Y-m-d'));
+    }
+
+    return $payload;
+}
+
 /* ======================================================
-   1) LOCAL -> GOOGLE (로컬 일정을 구글 Primary에 Push)
+   1-A) LOCAL -> GOOGLE: 신규 로컬 일정 Push (POST)
    ====================================================== */
 $lq = "SELECT wr_id, wr_subject, wr_content, wr_1, wr_2, wr_4, wr_5, wr_6, wr_7, wr_8
        FROM {$write_table}
        WHERE wr_is_comment=0 AND (wr_4='' OR wr_4 IS NULL) AND (wr_5='local' OR wr_5='' OR wr_5 IS NULL)";
 $lr = sql_query($lq);
 while($row = sql_fetch_array($lr)){
-    $sdate = $row['wr_1'] ? $row['wr_1'] : date('Y-m-d');
-    $edate = $row['wr_2'] ? $row['wr_2'] : $sdate;
-    $stime = $row['wr_6'] ? $row['wr_6'] : '09:00';
-    $etime = $row['wr_7'] ? $row['wr_7'] : '10:00';
-    $tz    = $row['wr_8'] ? $row['wr_8'] : 'Asia/Seoul';
-
-    $payload = array(
-      'summary'=>$row['wr_subject'] ? $row['wr_subject'] : '(제목없음)',
-      'description'=>$row['wr_content'] ? $row['wr_content'] : '',
-      'start'=>array('dateTime'=>$sdate.'T'.$stime.':00','timeZone'=>$tz),
-      'end'=>array('dateTime'=>$edate.'T'.$etime.':00','timeZone'=>$tz)
-    );
+    $payload = gcal_build_event_payload($row);
 
     $res = gcal_api_request('POST', 'https://www.googleapis.com/calendar/v3/calendars/'.urlencode(GCAL_PRIMARY_CALENDAR_ID).'/events', $access, $payload);
     if ($res['http']==200 || $res['http']==201){
@@ -59,7 +88,32 @@ while($row = sql_fetch_array($lr)){
             sql_query("UPDATE {$write_table} SET wr_4='{$gid}', wr_5='both', wr_last=NOW() WHERE wr_id='".intval($row['wr_id'])."'");
             sql_query("INSERT INTO {$map_table} SET bo_table='".sql_real_escape_string($bo_table)."', wr_id='".intval($row['wr_id'])."', google_event_id='{$gid}', sync_source='both', updated_at=NOW()
                        ON DUPLICATE KEY UPDATE google_event_id=VALUES(google_event_id), sync_source='both', updated_at=NOW()");
+            $push_new_count++;
         }
+    } else {
+        $push_error .= 'POST wr_id='.$row['wr_id'].' HTTP '.$res['http'].'; ';
+    }
+}
+
+/* ======================================================
+   1-B) LOCAL -> GOOGLE: 수정된 로컬 일정 Push (PATCH)
+   ====================================================== */
+$mq = "SELECT wr_id, wr_subject, wr_content, wr_1, wr_2, wr_4, wr_5, wr_6, wr_7, wr_8
+       FROM {$write_table}
+       WHERE wr_is_comment=0 AND wr_4 != '' AND wr_4 IS NOT NULL AND wr_5='local_modified'";
+$mr = sql_query($mq);
+while($row = sql_fetch_array($mr)){
+    $payload = gcal_build_event_payload($row);
+    $event_id = $row['wr_4'];
+
+    $patch_url = 'https://www.googleapis.com/calendar/v3/calendars/'.urlencode(GCAL_PRIMARY_CALENDAR_ID).'/events/'.urlencode($event_id);
+    $res = gcal_api_request('PATCH', $patch_url, $access, $payload);
+    if ($res['http']==200){
+        sql_query("UPDATE {$write_table} SET wr_5='both', wr_last=NOW() WHERE wr_id='".intval($row['wr_id'])."'");
+        sql_query("UPDATE {$map_table} SET sync_source='both', updated_at=NOW() WHERE bo_table='".sql_real_escape_string($bo_table)."' AND wr_id='".intval($row['wr_id'])."'");
+        $push_update_count++;
+    } else {
+        $push_error .= 'PATCH wr_id='.$row['wr_id'].' HTTP '.$res['http'].'; ';
     }
 }
 
@@ -153,13 +207,18 @@ foreach ($GCAL_SOURCE_CALENDARS as $source_cal_id) {
         $m = sql_fetch("SELECT * FROM {$map_table} WHERE bo_table='".sql_real_escape_string($bo_table)."' AND google_event_id='{$gid}'");
 
         if ($m && $m['wr_id']) {
+            // 로컬에서 수정 중인 이벤트는 덮어쓰지 않음 (LOCAL -> GOOGLE Push 우선)
+            $existing_row = sql_fetch("SELECT wr_3, wr_5 FROM {$write_table} WHERE wr_id='".intval($m['wr_id'])."'");
+            if ($existing_row && $existing_row['wr_5'] === 'local_modified') {
+                continue;
+            }
+
             // 기존 로컬 일정 업데이트
             if ($is_holiday_cal) {
                 // 공휴일은 항상 빨간색 강제
                 $keep_color = GCAL_HOLIDAY_COLOR;
             } else {
-                $existing = sql_fetch("SELECT wr_3 FROM {$write_table} WHERE wr_id='".intval($m['wr_id'])."'");
-                $keep_color = ($existing && $existing['wr_3']) ? $existing['wr_3'] : ($event_color ? $event_color : $google_default_color);
+                $keep_color = ($existing_row && $existing_row['wr_3']) ? $existing_row['wr_3'] : ($event_color ? $event_color : $google_default_color);
             }
 
             sql_query("UPDATE {$write_table}
@@ -222,7 +281,15 @@ sql_query("UPDATE {$g5['board_table']}
 
 if ($is_ajax){
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(array('success'=>empty($error),'count'=>$total_event_count,'error'=>$error,'updated'=>date('Y-m-d H:i:s')));
+    echo json_encode(array(
+        'success'=>empty($error) && empty($push_error),
+        'count'=>$total_event_count,
+        'pushed_new'=>$push_new_count,
+        'pushed_updated'=>$push_update_count,
+        'error'=>$error,
+        'push_error'=>$push_error,
+        'updated'=>date('Y-m-d H:i:s')
+    ));
     exit;
 }
 goto_url(G5_BBS_URL.'/board.php?bo_table='.$bo_table.'&cal_year='.$cal_year.'&cal_month='.$cal_month);

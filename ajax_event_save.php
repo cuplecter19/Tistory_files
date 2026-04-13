@@ -91,7 +91,11 @@ if ($w === 'u' && $wr_id > 0) {
                    wr_7='".sql_real_escape_string($wr_7)."',
                    wr_8='".sql_real_escape_string($wr_8)."',
                    wr_9='".sql_real_escape_string($new_wr9)."',
-                   wr_5=IF(wr_5='google','both',IF(wr_5='' OR wr_5 IS NULL,'local',wr_5)),
+                   wr_5=CASE
+                       WHEN wr_4 != '' AND wr_5 IN ('google','both') THEN 'local_modified'
+                       WHEN wr_5='' OR wr_5 IS NULL THEN 'local'
+                       ELSE wr_5
+                   END,
                    wr_last=NOW()
                WHERE wr_id='".intval($wr_id)."'");
 
