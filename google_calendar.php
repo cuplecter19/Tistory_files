@@ -38,33 +38,68 @@ $push_error = '';
  * 로컬 이벤트를 구글 캘린더 API용 payload로 변환하는 헬퍼 함수
  */
 function gcal_build_event_payload($row) {
-    $sdate = $row['wr_1'] ? $row['wr_1'] : date('Y-m-d');
-    $edate = $row['wr_2'] ? $row['wr_2'] : $sdate;
-    $stime = $row['wr_6'] ? $row['wr_6'] : '';
-    $etime = $row['wr_7'] ? $row['wr_7'] : '';
+    $sdate = $row['wr_1'] ? trim($row['wr_1']) : date('Y-m-d');
+    $edate = $row['wr_2'] ? trim($row['wr_2']) : $sdate;
+    $stime = isset($row['wr_6']) ? trim($row['wr_6']) : '';
+    $etime = isset($row['wr_7']) ? trim($row['wr_7']) : '';
     $tz    = $row['wr_8'] ? $row['wr_8'] : 'Asia/Seoul';
+
+    // 날짜 형식 검증: YYYY-MM-DD
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $sdate)) $sdate = date('Y-m-d');
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $edate)) $edate = $sdate;
 
     $payload = array(
         'summary'     => $row['wr_subject'] ? $row['wr_subject'] : '(제목없음)',
         'description' => $row['wr_content'] ? $row['wr_content'] : ''
     );
 
-    // 시간이 있으면 dateTime, 없으면 종일(date) 이벤트로 처리
-    if ($stime !== '') {
-        if (!$etime) {
-            // 종료 시간이 없으면 시작 시간 + 1시간
-            $end_dt = new DateTime($edate.'T'.$stime.':00');
-            $end_dt->modify('+1 hour');
-            $etime = $end_dt->format('H:i');
+    // 시간 형식 검증: HH:MM (정확히 5자, 숫자:숫자)
+    $valid_stime = (preg_match('/^\d{2}:\d{2}$/', $stime)) ? $stime : '';
+    $valid_etime = (preg_match('/^\d{2}:\d{2}$/', $etime)) ? $etime : '';
+
+    if ($valid_stime !== '') {
+        if ($valid_etime === '') {
+            // 종료 시간이 없거나 유효하지 않으면 시작 시간 + 1시간
+            try {
+                $end_dt = new DateTime($edate.'T'.$valid_stime.':00', new DateTimeZone($tz));
+                $end_dt->modify('+1 hour');
+                $valid_etime = $end_dt->format('H:i');
+            } catch (Exception $e) {
+                // DateTime 생성 실패 시 시작 시간 + 1시간(정수 연산)으로 보정
+                $parts = explode(':', $valid_stime);
+                $h = intval($parts[0]) + 1;
+                $valid_etime = str_pad($h % 24, 2, '0', STR_PAD_LEFT).':'.$parts[1];
+            }
         }
-        $payload['start'] = array('dateTime' => $sdate.'T'.$stime.':00', 'timeZone' => $tz);
-        $payload['end']   = array('dateTime' => $edate.'T'.$etime.':00', 'timeZone' => $tz);
+
+        // end가 start보다 앞서면 end를 start+1시간으로 보정
+        try {
+            $start_check = new DateTime($sdate.'T'.$valid_stime.':00', new DateTimeZone($tz));
+            $end_check   = new DateTime($edate.'T'.$valid_etime.':00', new DateTimeZone($tz));
+            if ($end_check <= $start_check) {
+                $end_check = clone $start_check;
+                $end_check->modify('+1 hour');
+                $edate = $end_check->format('Y-m-d');
+                $valid_etime = $end_check->format('H:i');
+            }
+        } catch (Exception $e) {
+            // end < start 보정에 실패해도 위에서 이미 계산된 $valid_etime으로 진행
+        }
+
+        $payload['start'] = array('dateTime' => $sdate.'T'.$valid_stime.':00', 'timeZone' => $tz);
+        $payload['end']   = array('dateTime' => $edate.'T'.$valid_etime.':00', 'timeZone' => $tz);
     } else {
+        // 종일(all-day) 이벤트
         $payload['start'] = array('date' => $sdate);
-        // 구글 종일 이벤트: end.date는 종료일 다음 날
-        $end_dt = new DateTime($edate);
-        $end_dt->modify('+1 day');
-        $payload['end']   = array('date' => $end_dt->format('Y-m-d'));
+        try {
+            $end_dt = new DateTime($edate);
+            $end_dt->modify('+1 day');
+            $payload['end'] = array('date' => $end_dt->format('Y-m-d'));
+        } catch (Exception $e) {
+            $end_dt = new DateTime($sdate);
+            $end_dt->modify('+1 day');
+            $payload['end'] = array('date' => $end_dt->format('Y-m-d'));
+        }
     }
 
     return $payload;
@@ -91,7 +126,18 @@ while($row = sql_fetch_array($lr)){
             $push_new_count++;
         }
     } else {
-        $push_error .= 'POST wr_id='.$row['wr_id'].' HTTP '.$res['http'].'; ';
+        // 실패한 일정은 local_push_failed로 마킹하여 무한 재시도 방지
+        sql_query("UPDATE {$write_table} SET wr_5='local_push_failed', wr_last=NOW() WHERE wr_id='".intval($row['wr_id'])."'");
+
+        // 에러 상세 (Google API 응답 본문 포함)
+        $err_detail = '';
+        if ($res['body']) {
+            $err_body = json_decode($res['body'], true);
+            if (isset($err_body['error']['message'])) {
+                $err_detail = $err_body['error']['message'];
+            }
+        }
+        $push_error .= 'POST wr_id='.$row['wr_id'].' HTTP '.$res['http'].($err_detail ? ' ('.$err_detail.')' : '').'; ';
     }
 }
 
@@ -113,7 +159,15 @@ while($row = sql_fetch_array($mr)){
         sql_query("UPDATE {$map_table} SET sync_source='both', updated_at=NOW() WHERE bo_table='".sql_real_escape_string($bo_table)."' AND wr_id='".intval($row['wr_id'])."'");
         $push_update_count++;
     } else {
-        $push_error .= 'PATCH wr_id='.$row['wr_id'].' HTTP '.$res['http'].'; ';
+        // PATCH 실패 시 에러 상세 포함
+        $err_detail = '';
+        if ($res['body']) {
+            $err_body = json_decode($res['body'], true);
+            if (isset($err_body['error']['message'])) {
+                $err_detail = $err_body['error']['message'];
+            }
+        }
+        $push_error .= 'PATCH wr_id='.$row['wr_id'].' HTTP '.$res['http'].($err_detail ? ' ('.$err_detail.')' : '').'; ';
     }
 }
 
@@ -280,12 +334,17 @@ sql_query("UPDATE {$g5['board_table']}
            WHERE bo_table='".sql_real_escape_string($bo_table)."'");
 
 if ($is_ajax){
+    // push_failed 건수 조회
+    $fail_row = sql_fetch("SELECT COUNT(*) as cnt FROM {$write_table} WHERE wr_is_comment=0 AND wr_5='local_push_failed'");
+    $push_failed_count = $fail_row ? intval($fail_row['cnt']) : 0;
+
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(array(
         'success'=>empty($error) && empty($push_error),
         'count'=>$total_event_count,
         'pushed_new'=>$push_new_count,
         'pushed_updated'=>$push_update_count,
+        'push_failed'=>$push_failed_count,
         'error'=>$error,
         'push_error'=>$push_error,
         'updated'=>date('Y-m-d H:i:s')
