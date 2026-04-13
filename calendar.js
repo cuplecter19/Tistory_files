@@ -902,6 +902,33 @@ var CalendarBoard = (function() {
     if (!subj || !subj.value.trim()) { alert('제목을 입력하세요.'); if (subj) subj.focus(); return; }
     var d1 = q('modal_wr_1');
     if (!d1 || !d1.value) { alert('시작 날짜를 선택하세요.'); if (d1) d1.focus(); return; }
+
+    // 종료일이 시작일보다 이전인지 체크
+    var d2 = q('modal_wr_2');
+    var t1 = q('modal_wr_6');
+    var t2 = q('modal_wr_7');
+
+    if (d1.value && d2 && d2.value) {
+        var startDate = d1.value;  // 'YYYY-MM-DD'
+        var endDate = d2.value;
+
+        // 종료일이 시작일보다 이전
+        if (endDate < startDate) {
+            alert('종료일이 시작일보다 앞설 수 없습니다.');
+            d2.focus();
+            return;
+        }
+
+        // 같은 날짜이고 시간이 둘 다 입력된 경우, 종료 시간이 시작 시간 이전인지 체크
+        if (endDate === startDate && t1 && t1.value && t2 && t2.value) {
+            if (t2.value <= t1.value) {
+                alert('종료 시간이 시작 시간보다 앞설 수 없습니다.');
+                t2.focus();
+                return;
+            }
+        }
+    }
+
     var colorVal = q('modal_wr_3') ? q('modal_wr_3').value : '#3B82F6';
     saveRecentColor(colorVal);
     var saveBtn = q('btn-save-event'); var origText = saveBtn ? saveBtn.textContent : '저장';

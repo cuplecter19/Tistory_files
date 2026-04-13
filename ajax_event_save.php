@@ -53,6 +53,18 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $wr_1)) {
 }
 if ($wr_2 && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $wr_2)) $wr_2 = $wr_1;
 
+// 종료일이 시작일보다 이전이면 에러
+if ($wr_2 < $wr_1) {
+    echo json_encode(array('success'=>false,'error'=>'종료일이 시작일보다 앞설 수 없습니다.')); exit;
+}
+
+// 같은 날짜에서 시작/종료 시간이 모두 있을 때, 종료 시간이 시작 시간 이전이면 에러
+if ($wr_1 === $wr_2 && $wr_6 !== '' && $wr_7 !== '') {
+    if ($wr_7 <= $wr_6) {
+        echo json_encode(array('success'=>false,'error'=>'종료 시간이 시작 시간보다 앞설 수 없습니다.')); exit;
+    }
+}
+
 function cal_add_date($date, $type, $i) {
     if ($type=='daily') return date('Y-m-d', strtotime($date.' +'.$i.' days'));
     if ($type=='weekly') return date('Y-m-d', strtotime($date.' +'.($i*7).' days'));
